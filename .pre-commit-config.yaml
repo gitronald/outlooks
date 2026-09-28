@@ -1,0 +1,35 @@
+# Hooks run on commit unless they name their own stage; without this every
+# hook would also run (and report "Skipped") on the post-merge stage.
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      - id: ruff-format
+      - id: ruff-check
+        args: [--fix]
+  - repo: local
+    hooks:
+      - id: pyrefly-check
+        name: pyrefly check
+        entry: uv run pyrefly check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+        require_serial: true
+  - repo: local
+    hooks:
+      - id: planners-validate
+        name: validate plan frontmatter
+        entry: uv run planners validate
+        language: system
+        files: ^\.planners/plans/[^/]+/plan\.md$
+  - repo: local
+    hooks:
+      - id: planners-index
+        name: 'regenerate plan index after merge'
+        entry: uv run planners index .
+        language: system
+        stages: [post-merge]
+        always_run: true
+        pass_filenames: false
