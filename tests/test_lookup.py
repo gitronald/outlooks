@@ -382,6 +382,9 @@ def test_reset_moves_a_names_pages_and_timelines_and_nothing_else(tmp_path):
         write_page(scratch, "morgan", 1, [h]),
         timeline(scratch, "morgan", "01"),
         timeline(scratch, "priya-n", "01"),
+        # Another lookup, whose name starts with this one's.
+        write_page(scratch, "priya-n", 1, [h]),
+        write_page(scratch, "priya-n-sent", 1, [h]),
     ]
     now = datetime(2026, 1, 5, 10, 15, 0)
     folder, moved = lk.reset("priya", scratch=scratch, now=now)
@@ -414,3 +417,25 @@ def test_reset_with_nothing_to_move_creates_nothing(tmp_path):
     scratch.mkdir()
     _, moved = lk.reset("priya", scratch=scratch)
     assert moved == [] and list(scratch.iterdir()) == []
+
+
+def test_page_files_are_the_names_own_and_no_longer_names(tmp_path):
+    scratch = tmp_path / "scratch"
+    h = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    mine = [write_page(scratch, f"priya{kind}", 1, [h]) for kind in ("", "-sender")]
+    mine += [write_page(scratch, f"priya-{kind}", 12, []) for kind in lk.PAGE_KINDS]
+    write_page(scratch, "priya-n", 1, [h])
+    write_page(scratch, "priya-n-title", 1, [h])
+    (scratch / "priya-page-notes.json").write_text("[]", encoding="utf-8")
+    assert lk.page_files(scratch, "priya") == sorted(set(mine))
+    assert len(lk.page_files(scratch, "priya-n")) == 2
+
+
+def test_split_leaves_out_the_pages_of_a_longer_name(tmp_path):
+    scratch = tmp_path / "scratch"
+    mine = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    other = hit("<e2>", "priya.nakamura@example.com", ["desk@example.org"])
+    write_page(scratch, "priya", 1, [mine])
+    write_page(scratch, "priya-n", 1, [other])
+    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path)
+    assert out.pages == 1

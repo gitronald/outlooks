@@ -214,7 +214,9 @@ The split:
    as well as its addresses and subject (the people a message is *about*);
    `--no-match-summary` turns that off when a common term floods it.
 
-   It merges every `{name}-*page-*.json` on `internetMessageId`, keeps the
+   It merges the name's page files (the four kinds the searchers write,
+   and never those of a longer name that starts with it) on
+   `internetMessageId`, keeps the
    hits that match the terms (plus a system sender's notice to us that
    arrives in the same minute as an acknowledgement to the person, which
    names them only in its body — the title searcher is what gets that hit

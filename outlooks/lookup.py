@@ -47,6 +47,9 @@ TIMELINE_KEYS = (
 # a file is about, and the local date it claims.
 CHECK_READS = ("internet_message_id", "date_local", "direction", "system", "subject")
 REQUIRED_KEYS = ("internet_message_id", "date_local")
+# The searches whose pages carry their kind in the file name
+# (``{name}-sent-page-{n}.json``); the query search's carry none.
+PAGE_KINDS = ("sender", "title", "sent")
 
 
 def _ts(value: str) -> datetime:
@@ -210,8 +213,17 @@ class Checked:
 
 
 def page_files(scratch: Path, name: str) -> list[Path]:
-    """The page files the searchers saved for ``name``, every kind of search."""
-    return sorted(scratch.glob(f"{name}-*page-*.json"))
+    """The page files the searchers saved for ``name``, every kind of search.
+
+    A longer name that starts with ``{name}-`` (another lookup's) is not one
+    of them: between the name and ``page`` there is one of
+    :data:`PAGE_KINDS` or nothing.
+    """
+    kinds = "|".join(PAGE_KINDS)
+    own = re.compile(re.escape(name) + rf"-(?:(?:{kinds})-)?page-\d+\.json")
+    return sorted(
+        f for f in scratch.glob(f"{name}-*page-*.json") if own.fullmatch(f.name)
+    )
 
 
 def timelines(scratch: Path, name: str) -> list[tuple[str, Path]]:
