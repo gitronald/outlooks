@@ -136,7 +136,16 @@ The clock is the connector, not the model: a read is roughly fifteen to
 twenty seconds of wall time, and a subagent runs its calls one after
 another, so a reader given seven messages can take ten minutes where a
 searcher's single page takes half a minute. The fan-out is about **how many
-agents run at once**, not about how many hits there are. The split:
+agents run at once**, not about how many hits there are.
+
+**Before the searchers, clear the name.** Run `{cli} lookup-reset {name}`
+for each name. The split merges every page file it finds for a name, so a
+second lookup of the same name would mix this run's pages with whichever of
+the last run's it did not rewrite. The command moves that name's page and
+timeline files to `earlier/` under the scratch directory and prints what it
+moved. It deletes nothing.
+
+The split:
 
 1. **Search** — up to four `sonnet` subagents per person, launched together
    in one message:
@@ -225,7 +234,8 @@ agents run at once**, not about how many hits there are. The split:
    each read) and writes `{name}-{nn}.timeline.json` in the scratch
    directory per message: `file, received_utc, date_local, direction,
    sender, to, subject, internet_message_id, weblink, attachments, summary,
-   system`. Readers archive nothing themselves: the main session runs one
+   system` (`{cli} doc lookup/timeline` lists every key, and which of them
+   `check` reads). Readers archive nothing themselves: the main session runs one
    `import` after the round, so parallel agents never write the archive at
    once. Give each reader the `nn` from the worklist, so its files slot in
    beside the ones the split wrote.
@@ -253,7 +263,10 @@ agents run at once**, not about how many hits there are. The split:
    `{name}-{nn}.timeline.json`, recomputes the local date from the raw
    file's `receivedDateTime`, confirms the archived `messages/{id-hash}.json`
    exists, and prints the `.txt` count beside it (which must be zero when
-   the attachments are all images). It exits non-zero on any mismatch.
+   the attachments are all images). It exits non-zero on any `BAD` row,
+   and says under each one why: a `missing key` line means the file was
+   written by another build or cut short, not that its date is wrong
+   (`{cli} doc lookup/timeline`).
 
    Then **sweep the archived bodies for people the searches did not
    cover**: the `cc` recipients of every message in hand, and every address

@@ -6,6 +6,7 @@
     outlooks render <message.json> --out <dir> [--text <att.txt>]
     outlooks split <name> --match <term> [--since] [--batches <dir>]
     outlooks check <name>
+    outlooks lookup-reset <name>
     outlooks worklist --after YYYY-MM-DD --before YYYY-MM-DD --out <dir>
     outlooks totals [<prefix> ...] | --check AFTER BEFORE
     outlooks audit <prefix> [--sweep <file>]
@@ -315,7 +316,7 @@ def split(
 def check(
     name: Annotated[str, typer.Argument(help="The lookup's name.")],
 ) -> None:
-    """Check a lookup's timeline files against the archive; exit 1 on any mismatch."""
+    """Check a lookup's timeline files against the archive; exit 1 on any finding."""
     from outlooks import config, lookup
 
     rows = lookup.check(name)
@@ -326,9 +327,27 @@ def check(
             f"{r.nn} {r.received or '-'} {r.day or '-'} {'ok' if r.ok else 'BAD'} "
             f"{r.direction:3}{system} txt={r.texts} {r.subject[:60]}"
         )
+        if r.finding:
+            typer.echo(f"   {r.finding}")
     if not rows:
         typer.echo(f"no {name}-NN.timeline.json files in {config.scratch_dir()}")
     raise typer.Exit(0 if rows and all(r.ok for r in rows) else 1)
+
+
+@app.command("lookup-reset")
+def lookup_reset(
+    name: Annotated[str, typer.Argument(help="The lookup's name.")],
+) -> None:
+    """Move a lookup's page and timeline files aside before a repeat lookup."""
+    from outlooks import config, lookup
+
+    folder, moved = lookup.reset(name)
+    for path in moved:
+        typer.echo(f"moved {path}")
+    if moved:
+        typer.echo(f"{len(moved)} files of {name} moved to {folder}")
+    else:
+        typer.echo(f"no files of {name} in {config.scratch_dir()}")
 
 
 @app.command()

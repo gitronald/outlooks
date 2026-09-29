@@ -112,6 +112,7 @@ so one repair never rewrites anything else that differs.
 | `outlooks coverage [--since] [--ledger]` | covered windows, gaps, unread counts, ledger lag, and the next sweep's start |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |
+| `outlooks lookup-reset <name>` | move a lookup's page and timeline files aside before a repeat lookup |
 | `outlooks worklist --after --before --out` | reader worklists for a full read of a range |
 | `outlooks totals [prefix ...]` / `--check AFTER BEFORE` | window sizes; the item-id proof |
 | `outlooks windows init/fill/split/batches/remaining` | the backfill planner |

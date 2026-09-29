@@ -33,6 +33,12 @@ what a consuming repo has to do about it:
   function's parameter names.
 - `outlooks coverage --ledger <path>` reads a ledger kept somewhere other
   than `ledger.csv` in `archive_dir`.
+- `outlooks lookup-reset <name>` moves a lookup's page and timeline files
+  to `earlier/{timestamp}/` under `scratch_dir` and prints what it moved, so
+  a repeat lookup of a name never merges the last one's pages. It deletes
+  nothing, and the lookup skill runs it before launching searchers.
+- `outlooks doc lookup/timeline` lists every key of a lookup's timeline
+  file, which of them `check` reads, and which are required.
 
 ### Changed
 
@@ -46,6 +52,11 @@ what a consuming repo has to do about it:
   longer says `(--replace rewrites)`. A tool that matches the line should
   match on `DIFFERS from the stored copy` and take the path after the last
   `: `. The README says when `--replace` is the fix.
+- `outlooks check` prints why a row is `BAD` on a line of its own under the
+  row: `missing key date_local` (or `internet_message_id`), `not archived`,
+  or the two dates that disagree. A timeline file with no
+  `internet_message_id` used to stop the command with a traceback, and one
+  with no `date_local` read as a date mismatch. The exit code is unchanged.
 
 ## [0.1.0] - 2026-09-27
 

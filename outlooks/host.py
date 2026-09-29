@@ -86,6 +86,10 @@ HOST = Host(
             source="skills/lookup/references/reader-brief.md",
         ),
         Doc(
+            name="lookup/timeline",
+            source="skills/lookup/references/timeline.md",
+        ),
+        Doc(
             name="window/pager-brief", source="skills/window/references/pager-brief.md"
         ),
         Doc(
