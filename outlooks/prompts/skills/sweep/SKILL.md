@@ -48,13 +48,22 @@ instant to pass as `afterDateTime`, already in UTC. Pass it as printed.
 Don't work it out from the lines above it, which are in the configured
 zone. When the profile's *Ledger columns* puts the ledger somewhere other
 than `ledger.csv` in `archive_dir`, run `{cli} coverage --ledger <path>`,
-or the line is computed without the ledger.
+or the line is computed without the ledger. The path has to name a file:
+before the first sweep has written the ledger, run `{cli} coverage`
+without it.
 
 Run the date-window sweep in **filter mode**: `afterDateTime` set to that
 instant, with no `query` and no `sender`, and `limit: 25`. Page with
-`nextOffset` until `totalResultCount` is covered. No `next sweep from` line
-means an empty ledger and no recorded coverage: ask the operator where to
-start.
+`nextOffset` until `totalResultCount` is covered.
+
+An empty ledger has no high-water mark, and the footer then has no `ledger
+high-water mark` line. Ask the operator where to start, in both cases:
+
+- With a `next sweep from` line, it is the end of recorded coverage. The
+  archived mail before it has never been classified, and a sweep that
+  starts there never will. Say so, and offer that instant and the start of
+  coverage.
+- With no `next sweep from` line there is no recorded coverage either.
 
 The instant is the ledger's latest `received` **minus five minutes**, or
 the end of recorded coverage when that is earlier. The margin is there

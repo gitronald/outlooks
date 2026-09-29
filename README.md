@@ -162,7 +162,8 @@ rewritten:
 ```
 
 The line names the fields that differ, so the two copies need no diffing by
-hand. Which copy is right decides what to do:
+hand. It names none when the stored copy is not JSON. Which copy is right
+decides what to do:
 
 - **The stored copy was not written from a capture** (it was saved by hand
   with `outlooks save`, or typed out): the capture is the connector's own

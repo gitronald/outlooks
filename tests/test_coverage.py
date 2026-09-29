@@ -287,6 +287,33 @@ def test_import_names_the_differing_fields_and_caps_the_list(tmp_path):
     assert "--replace" not in result.output
 
 
+def test_import_lists_a_stored_copy_that_is_not_json_and_goes_on(tmp_path):
+    root = config.archive_dir()
+    stored, _ = store.save_message(message(1), root=root)
+    stored.write_text(stored.read_text(encoding="utf-8")[:40], encoding="utf-8")
+    captured = config.captured_dir()
+    first = write_capture(
+        captured,
+        "20260913T1",
+        READ,
+        {"uri": f"mail:///messages/ID1a?owner={BOX}"},
+        message(1),
+    )
+    write_capture(
+        captured,
+        "20260913T2",
+        READ,
+        {"uri": f"mail:///messages/ID2a?owner={BOX}"},
+        message(2),
+    )
+    result = CliRunner().invoke(app, ["import"])
+    assert result.exit_code == 0, result.output
+    [line] = [s for s in result.output.splitlines() if "DIFFERS" in s]
+    assert line == f"  DIFFERS from the stored copy: {first}"
+    key = store.id_hash("<m2@example.com>")
+    assert (root / "messages" / f"{key}.json").is_file()
+
+
 def test_replace_moves_a_wrong_month_hit_and_drops_its_duplicate(tmp_path):
     root = tmp_path / "archive"
     wrong = hit(1, received="2025-03-10T12:00:00.000Z", summary="typed")
@@ -749,6 +776,25 @@ def test_cli_coverage_reads_a_ledger_kept_elsewhere(tmp_path):
     assert result.output.splitlines()[-1] == (
         "next sweep from         2026-03-19T23:55:00Z"
     )
+
+
+def test_cli_coverage_refuses_a_ledger_that_is_not_a_file(tmp_path):
+    result = CliRunner().invoke(
+        app, ["coverage", "--ledger", str(tmp_path / "typo.csv")]
+    )
+    assert result.exit_code == 1
+    assert "typo.csv is not a file" in result.output
+    assert "next sweep from" not in result.output
+
+
+def test_the_sweep_asks_where_to_start_on_an_empty_ledger():
+    from importlib.resources import files
+
+    sweep = (files("outlooks.prompts") / "skills/sweep/SKILL.md").read_text("utf-8")
+    step = sweep.split("## 1. Sweep (step `sweep`)", 1)[1].split("\n## ", 1)[0]
+    asks = step.split("An empty ledger has no high-water mark", 1)[1]
+    assert "Ask the operator where to start, in both cases" in asks
+    assert "has never been classified" in asks
 
 
 def test_the_sweep_names_the_margin_coverage_uses():

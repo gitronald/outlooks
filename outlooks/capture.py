@@ -375,12 +375,19 @@ def import_captures(
 
 
 def _differing(message: dict[str, Any], root: Path | None) -> list[str]:
-    """The fields in which a capture's message differs from the stored copy."""
+    """The fields in which a capture's message differs from the stored copy.
+
+    None when there is no stored copy to compare, or it is not JSON: the
+    capture is still listed, with no field named.
+    """
     key = store.id_hash(message["internetMessageId"])
     path = (store.archive_root() if root is None else root) / "messages" / f"{key}.json"
     if not path.exists():
         return []
-    stored = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return []
     return differing(stored, store.stable(message))
 
 

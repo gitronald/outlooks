@@ -174,6 +174,8 @@ def coverage(
             start = datetime.fromisoformat(since).replace(tzinfo=config.zone())
         except ValueError:
             raise _fail(f"{since!r} is not a YYYY-MM-DD date") from None
+    if ledger is not None and not ledger.is_file():
+        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
     hits = store.load_hits()
     lines = cv.report(
         box,
