@@ -9,6 +9,8 @@ own contract.
 
 import json
 
+import pytest
+
 from outlooks import lookup as lk
 from outlooks import store
 
@@ -284,6 +286,55 @@ def test_is_system_and_direction():
         == "out"
     )
     assert lk.direction("notices@system.example.org", ["desk@example.org"]) == "in"
+
+
+def test_a_notice_senders_mail_is_inbound_whoever_it_is_addressed_to(monkeypatch):
+    from outlooks import config
+
+    # A bounce: its recipient is the address that failed, not ours.
+    bounce = "postmaster@mail.example.net"
+    assert config.is_notice_sender(bounce)
+    assert not config.is_system_sender(bounce)
+    assert lk.is_system(bounce)
+    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert lk.direction("Postmaster@Other.Example.com", []) == "in"
+    # An address both lists match is a notice sender.
+    monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", "*@mail.example.net")
+    assert config.is_notice_sender(bounce)
+    assert not config.is_system_sender(bounce)
+    assert config.is_system_sender("alerts@mail.example.net")
+    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert lk.direction("alerts@mail.example.net", ["priya@example.com"]) == "out"
+
+
+# The second system list also matches the bounce address: it is still a notice.
+@pytest.mark.parametrize(
+    "system_senders",
+    ["notices@system.example.org", "notices@system.example.org,*@mail.example.net"],
+)
+def test_split_pairs_nothing_with_a_matched_notice(
+    tmp_path, monkeypatch, system_senders
+):
+    monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", system_senders)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    bounce = hit(
+        "<bounce@mail.example.net>",
+        "postmaster@mail.example.net",
+        ["priya.nakamura@example.com"],
+        received="2026-01-05T10:00:00Z",
+    )
+    system_to_us = hit(
+        "<notice@system.example.org>",
+        "notices@system.example.org",
+        ["desk@example.org"],
+        received="2026-01-05T10:00:20Z",
+    )
+    write_page(scratch, "priya", 1, [bounce, system_to_us])
+    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path / "archive")
+    assert [h["internetMessageId"] for _, h in out.to_read] == [
+        bounce["internetMessageId"]
+    ]
 
 
 # --- timeline keys ------------------------------------------------------------

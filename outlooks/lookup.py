@@ -62,16 +62,23 @@ def local_day(received_utc: str) -> str:
 
 
 def is_system(sender: str) -> bool:
-    return sender.lower() in config.settings().system_senders
+    """Whether the sender is an automated one, of either list."""
+    return config.is_system_sender(sender) or config.is_notice_sender(sender)
 
 
 def direction(sender: str, to: list[str]) -> str:
-    """``out`` for our own mail and for system mail not sent to us, else ``in``."""
+    """``out`` for our own mail and for system mail not sent to us, else ``in``.
+
+    A notice sender's mail is ``in`` whoever it is addressed to: a bounce
+    names the address that failed, and is still a notice to us.
+    """
     own = config.settings().own_addresses
     s = sender.lower()
     if s in own:
         return "out"
-    if is_system(s):
+    if config.is_notice_sender(s):
+        return "in"
+    if config.is_system_sender(s):
         return "in" if any(t.lower() in own for t in to) else "out"
     return "in"
 
@@ -161,10 +168,11 @@ def split(
     system_times = [
         _ts(h["receivedDateTime"])
         for h in hits.values()
-        if is_system(h.get("sender") or "")
+        if config.is_system_sender(h.get("sender") or "")
     ]
     for h in seen:
-        if not is_system(h.get("sender") or "") or h["internetMessageId"] in hits:
+        sender = h.get("sender") or ""
+        if not config.is_system_sender(sender) or h["internetMessageId"] in hits:
             continue
         if not any(r.lower() in own for r in h.get("recipients") or []):
             continue

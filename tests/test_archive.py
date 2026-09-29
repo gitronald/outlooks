@@ -157,6 +157,57 @@ def test_classify_system_mail_by_its_sender_alone():
     assert cl.classify(cl.view(hit)).role == "system"
 
 
+def test_classify_a_notice_senders_mail_as_system_flagged_notice(monkeypatch):
+    bounce = {
+        **load("hits-page.json")[1],
+        "sender": "Postmaster@Mail.Example.net",
+        "recipients": ["priya.nakamura@example.com"],
+        "subject": "Undeliverable: Winter Soil",
+    }
+    assert cl.classify(cl.view(bounce)) == cl.Facts("system", extra={"notice": True})
+    monkeypatch.delenv("OUTLOOKS_NOTICE_SENDERS")
+    assert cl.classify(cl.view(bounce)).role == "followup"
+
+
+@pytest.mark.parametrize(
+    "entry,address,found",
+    [
+        ("notices@system.example.org", "Notices@System.Example.org", True),
+        ("notices@system.example.org", "xnotices@system.example.org", False),
+        ("notices@system.example.org", "notices@system.example.org.net", False),
+        ("*@bounces.example.net", "a1b2@bounces.example.net", True),
+        ("*@bounces.example.net", "a1b2@example.net", False),
+        ("ticket-*@help.example.net", "ticket-4821@help.example.net", True),
+        ("ticket-*@help.example.net", "ticket-4821@help.example.com", False),
+        # Only ``*`` is special: a dot is a dot.
+        ("notices@system.example.org", "notices@systemXexample.org", False),
+        ("*", "", False),
+    ],
+)
+def test_a_sender_list_entry_is_an_address_or_a_pattern(
+    monkeypatch, entry, address, found
+):
+    from outlooks import config
+
+    monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", entry)
+    assert config.is_system_sender(address) is found
+
+
+@pytest.mark.parametrize("key", ["OUTLOOKS_SYSTEM_SENDERS", "OUTLOOKS_NOTICE_SENDERS"])
+def test_an_own_address_a_pattern_matches_is_still_ours(monkeypatch, key):
+    from outlooks import config
+
+    monkeypatch.setenv(key, "*@example.org")
+    assert not config.is_system_sender("Desk@Example.org")
+    assert not config.is_notice_sender("desk@example.org")
+    # The pattern still lists the addresses that are not ours.
+    other = "alerts@example.org"
+    assert config.is_system_sender(other) or config.is_notice_sender(other)
+    assert cl.classify(cl.view(load("decision-sent.json"))) == cl.Facts(
+        "decision", outcome="Accepted with changes"
+    )
+
+
 def test_classify_decision_and_our_replies():
     decision = cl.view(load("decision-sent.json"))
     assert cl.classify(decision) == cl.Facts(
@@ -183,6 +234,69 @@ def test_thread_subject_strips_stacked_prefixes():
         cl.thread_subject("Re: [External] RE: Fwd: Inquiry: Winter Soil")
         == "inquiry: winter soil"
     )
+
+
+AUTOMATIC = (
+    "Automatic reply: Winter Soil",
+    "Automatic Response: Winter Soil",
+    "Auto-reply: Winter Soil",
+    "Auto Reply - Winter Soil",
+    "Auto-reply – Winter Soil",
+    "Automatic reply -- Winter Soil",
+    "AutoReply: Winter Soil",
+    "Auto response: Winter Soil",
+    "Out of Office: Winter Soil",
+    "Out of the office — Winter Soil",
+    "[External] Automatic reply: Winter Soil",
+)
+# A subject that opens with the phrase and carries on is a person's.
+OPENS_WITH_THE_PHRASE = (
+    "Out of office coverage schedule",
+    "Out of the office Winter Soil",
+    "Out of office-hours support",
+    "Automatic reply to your inquiry",
+    "Auto-reply Winter Soil",
+    "Auto response times report",
+)
+NOT_AUTOMATIC = (
+    "Winter Soil",
+    "Re: Winter Soil",
+    "Re: Automatic reply: Winter Soil",
+    "Undeliverable: Winter Soil",
+    "Automatic watering for winter soil",
+    "Autoreplying to Winter Soil",
+    "Auto parts for a tiller",
+    *OPENS_WITH_THE_PHRASE,
+)
+
+
+@pytest.mark.parametrize("subject", AUTOMATIC)
+def test_an_automatic_reply_is_a_followup_flagged_auto(subject):
+    assert cl.is_auto_reply(subject)
+    assert cl.is_reply(subject)
+    assert cl.thread_subject(subject) == "winter soil"
+    hit = {**load("hits-page.json")[1], "subject": subject}
+    assert cl.classify(cl.view(hit)) == cl.Facts("followup", extra={"auto": True})
+
+
+@pytest.mark.parametrize("subject", NOT_AUTOMATIC)
+def test_any_other_subject_is_not_flagged_auto(subject):
+    assert not cl.is_auto_reply(subject)
+    hit = {**load("hits-page.json")[1], "subject": subject}
+    assert cl.classify(cl.view(hit)).extra.get("auto", False) is False
+
+
+@pytest.mark.parametrize("subject", OPENS_WITH_THE_PHRASE)
+def test_a_subject_that_opens_with_the_phrase_and_carries_on_is_an_arrival(subject):
+    assert not cl.is_reply(subject)
+    assert cl.thread_subject(subject) == subject.lower()
+    hit = {**load("hits-page.json")[1], "subject": subject}
+    assert cl.classify(cl.view(hit)) == cl.Facts("arrival")
+
+
+def test_the_phrase_alone_is_an_automatic_reply():
+    assert cl.is_auto_reply("Out of office")
+    assert cl.thread_subject("Out of office") == ""
 
 
 def test_decision_with_nothing_after_the_tag_has_no_outcome():

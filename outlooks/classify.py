@@ -9,7 +9,8 @@ message plays.
 Roles: ``arrival`` (a correspondent's first message), ``followup`` (a reply or
 forward from outside), ``ours`` (mail from one of ``own_addresses``),
 ``decision`` (ours, with the configured ``decision_tag`` in the subject), and
-``system`` (mail from one of ``system_senders``). What a system sender's
+``system`` (mail from one of ``system_senders`` or ``notice_senders``; from
+the second, ``extra["notice"]`` is true). What a system sender's
 notifications say is the repo's own business: the package parses none of it.
 """
 
@@ -28,17 +29,27 @@ __all__ = [
     "Facts",
     "Mail",
     "classify",
+    "is_auto_reply",
     "is_reply",
     "thread_subject",
     "view",
 ]
 
+# What an automatic reply's subject opens with: the phrase, then what ends it.
+# A colon ends it, as does a run of dashes with a space after it, or the end
+# of the subject. Words after the bare phrase do not: a person writes ``Out of
+# office coverage`` too. Both patterns are built from it, so a subject that
+# reads as automatic always reads as a reply.
+AUTO_PHRASE = (
+    r"(?:auto(?:matic)?[\s-]?(?:reply|response)|out of (?:the )?office)"
+    r"\s*(?::|[\u2013\u2014-]+(?=\s|$)|$)"
+)
 REPLY_PREFIX = re.compile(
-    r"^\s*(?:(?:re|aw|fw|fwd|wg|sv|antw|automatic reply|auto(?:matic)? response"
-    r"|out of office|undeliverable)\s*:|\[external\])\s*",
+    r"^\s*(?:(?:re|aw|fw|fwd|wg|sv|antw|undeliverable)\s*:|\[external\]"
+    rf"|{AUTO_PHRASE})\s*",
     re.I,
 )
-AUTO_REPLY = re.compile(r"^\s*(?:automatic reply|out of office|auto)", re.I)
+AUTO_REPLY = re.compile(rf"^\s*(?:\[external\]\s*)*{AUTO_PHRASE}", re.I)
 TAG = re.compile(r"<[^>]+>")
 
 
@@ -122,6 +133,15 @@ def is_reply(subject: str) -> bool:
     return bool(REPLY_PREFIX.match(subject))
 
 
+def is_auto_reply(subject: str) -> bool:
+    """Whether the subject opens as an automatic reply's does.
+
+    An ``[External]`` tag ahead of it is passed over. A person's reply to an
+    automatic reply (``Re: Automatic reply: ...``) is not one.
+    """
+    return bool(AUTO_REPLY.match(subject))
+
+
 def thread_subject(subject: str) -> str:
     """The subject without reply/forward/external prefixes, lowercased."""
     previous = None
@@ -144,7 +164,9 @@ def classify(mail: Mail) -> Facts:
     """The role ``mail`` plays; a decision carries its label as ``outcome``."""
     subject = mail.subject
     settings = config.settings()
-    if mail.sender in settings.system_senders:
+    if config.is_notice_sender(mail.sender):
+        return Facts("system", extra={"notice": True})
+    if config.is_system_sender(mail.sender):
         return Facts("system")
     if mail.sender in settings.own_addresses:
         pattern = decision_tag()
@@ -154,5 +176,5 @@ def classify(mail: Mail) -> Facts:
             return Facts("decision", outcome=label or None)
         return Facts("ours")
     if is_reply(subject):
-        return Facts("followup", extra={"auto": bool(AUTO_REPLY.match(subject))})
+        return Facts("followup", extra={"auto": is_auto_reply(subject)})
     return Facts("arrival")

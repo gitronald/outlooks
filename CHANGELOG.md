@@ -23,6 +23,76 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
+### Added
+
+- `classify.is_auto_reply(subject)` says whether a subject opens as an
+  automatic reply's does. It is the test behind a `followup`'s
+  `extra["auto"]`, for a repo that has only the subject in hand. A repo
+  that keeps a copy of the package's internal pattern can drop the copy.
+- A `notice_senders` setting (`OUTLOOKS_NOTICE_SENDERS`), empty by default:
+  automated senders that write to us, such as a mail system's bounce
+  address. Mail from one is `direction: in` whoever it is addressed to,
+  where mail from one of `system_senders` is `out` unless it is addressed
+  to us. `classify` gives it the `system` role with `extra["notice"]` true,
+  `outlooks senders` marks its addresses `notice`, and a lookup pairs
+  nothing with it. An address both lists match is a notice sender, in a
+  lookup's pairing as everywhere else.
+- An entry of `system_senders` or `notice_senders` may be a pattern in
+  which `*` stands for any run of characters (`postmaster@*`,
+  `*@bounces.example.net`), for a sender that writes from many addresses.
+  An entry without `*` matches as before.
+- `config.is_system_sender(address)` and `config.is_notice_sender(address)`
+  say whether an address is a sender of each kind, patterns included. An
+  address is of one kind at most: one of `own_addresses` is neither, and
+  one both lists match is a notice sender only.
+
+### Changed
+
+- `config.Settings` has one more field, `notice_senders`, after
+  `system_senders`, and `config.KEYS` one more key in the same place. A
+  repo that builds a `Settings` itself passes the new field. A repo whose
+  test fixture pins every setting pins `OUTLOOKS_NOTICE_SENDERS` too (the
+  README's fixture does).
+- A repo that tests `address in settings().system_senders` keeps working
+  while every entry is an address. Once an entry is a pattern it calls
+  `config.is_system_sender(address)`.
+- Mail from one of `own_addresses` is ours even when `system_senders` lists
+  the address too. `classify` gave it the `system` role, where a lookup's
+  `direction` and `outlooks senders` already read it as ours, and now gives
+  it `ours` or `decision`. A lookup's timeline key `system` is false for
+  it, and was true. A repo that lists one of its own addresses in
+  `system_senders` computes its stored roles again.
+- A lookup's timeline key `system` is true for a sender in either list. It
+  was true for one of `system_senders` only, and is unchanged for a repo
+  that sets no `notice_senders`.
+- `outlooks senders` marks the hits that have no sender `none` and leaves
+  them out of the unlisted count. They were counted as one unlisted
+  address, which no setting could list. Its closing line now names both
+  lists: `system_senders` for a notifier that speaks for us, and
+  `notice_senders` for one that only writes to us.
+- The reply test and the automatic-reply test read one list of phrases, so
+  a subject that reads as automatic always reads as a reply. `Auto-reply`,
+  `Auto reply`, `Autoreply`, `Auto-response`, and `Out of the office` are
+  recognized beside `Automatic reply`, `Automatic response`, and `Out of
+  office`. A colon ends the phrase, as does a run of dashes with a space
+  after it (`Auto Reply - ...`), or the end of the subject. Words after the
+  bare phrase do not: `Out of office coverage schedule` is a person's
+  subject and stays an `arrival`. A message with one of the newly
+  recognized subjects was an `arrival` and is now a `followup` with
+  `extra["auto"]` true, `is_reply` is true of its subject, and
+  `thread_subject` drops the phrase. An `[External]` tag ahead of the phrase
+  no longer hides it: `extra["auto"]` was false there and is now true. A
+  repo that stored roles or thread subjects computed by an earlier release
+  computes them again.
+- `outlooks doctor` names the release that stamped the skill stub when it
+  is not the installed one: `content current for outlooks X.Y.Z, stamped by
+  W.V.U`. It said `current for outlooks X.Y.Z` of a stub whose header named
+  an earlier release. The check still passes, because the stub's content is
+  what decides it, and `outlooks install` restamps the stub. Nothing to do
+  for a repo that follows the upgrade recipe.
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

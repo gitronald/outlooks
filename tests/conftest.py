@@ -16,6 +16,7 @@ import pytest
 MAILBOX = "desk@example.org"
 OWN_ADDRESSES = "desk@example.org,events@example.org"
 SYSTEM_SENDERS = "notices@system.example.org"
+NOTICE_SENDERS = "postmaster@*"
 DECISION_TAG = "[Decision]"
 TIMEZONE = "America/Los_Angeles"
 
@@ -35,6 +36,7 @@ def outlooks_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("OUTLOOKS_MAILBOX", MAILBOX)
     monkeypatch.setenv("OUTLOOKS_OWN_ADDRESSES", OWN_ADDRESSES)
     monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", SYSTEM_SENDERS)
+    monkeypatch.setenv("OUTLOOKS_NOTICE_SENDERS", NOTICE_SENDERS)
     monkeypatch.setenv("OUTLOOKS_DECISION_TAG", DECISION_TAG)
     monkeypatch.setenv("OUTLOOKS_TIMEZONE", TIMEZONE)
     monkeypatch.setenv("OUTLOOKS_ARCHIVE_DIR", str(tmp_path / "archive"))

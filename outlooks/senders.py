@@ -1,11 +1,14 @@
 """Who writes to the mailbox, counted from the archive's hits.
 
-A notifier that is not in ``system_senders`` is classified as a person
-writing in: its mail becomes an ``arrival``, and its address reads as a
-correspondent's. No single message shows that, so :func:`senders` counts the
-inbound hits by sender address and marks each address ``own``, ``system``, or
-``unlisted``. A frequent unlisted address that no person writes from is the
-one to add to ``system_senders``. Read-only, over the hits tier.
+A notifier that is in neither ``system_senders`` nor ``notice_senders`` is
+classified as a person writing in: its mail becomes an ``arrival``, and its
+address reads as a correspondent's. No single message shows that, so
+:func:`senders` counts the inbound hits by sender address and marks each
+address ``own``, ``system``, ``notice``, or ``unlisted``. A frequent unlisted
+address that no person writes from is the one to list: in ``system_senders``
+when it speaks for us, in ``notice_senders`` when it only writes to us. A
+hit with no sender has no address to list, and is marked ``none``.
+Read-only, over the hits tier.
 
 Internal: not part of the Python API a consuming repo may import (the
 README's "Python API" lists what is). The CLI is this module's interface.
@@ -26,7 +29,7 @@ from outlooks.coverage import parse_ts
 class Sender:
     address: str
     count: int
-    mark: str  # "own", "system", or "unlisted"
+    mark: str  # "own", "system", "notice", "unlisted", or "none" (no sender)
 
 
 def is_inbound(hit: dict[str, Any], own: tuple[str, ...]) -> bool:
@@ -60,9 +63,13 @@ def senders(
         counts[(hit.get("sender") or "").lower()] += 1
     found = []
     for address, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
-        if address in settings.own_addresses:
+        if not address:
+            mark = "none"
+        elif address in settings.own_addresses:
             mark = "own"
-        elif address in settings.system_senders:
+        elif config.is_notice_sender(address):
+            mark = "notice"
+        elif config.is_system_sender(address):
             mark = "system"
         else:
             mark = "unlisted"

@@ -23,6 +23,16 @@ tooling reads nothing else. Run it first; the names below refer to its keys.
   (a web system's notification address, say). A message from one is
   `direction: out` unless one of the own addresses is among its recipients, in
   which case it is a notice *to* us and `in`. A repo with none lists none.
+- **Notice senders:** `notice_senders`, automated senders that write to us
+  (a mail system's bounce address, say). A message from one is
+  `direction: in` whoever it is addressed to: a bounce's recipient is the
+  address that failed. A repo with none lists none.
+- **Patterns:** an entry of `system_senders` or `notice_senders` is an
+  address, or a pattern in which `*` stands for any run of characters
+  (`postmaster@*`), and a sender is one of the list when an entry matches
+  its whole address, in any case. An address belongs to one list: one of
+  the own addresses is ours whatever a pattern matches, and an address both
+  sender lists match is a notice sender.
 - **Decision tag:** `decision_tag`, the subject tag the repo's decision
   letters carry, when it has one.
 - **Ledger:** `ledger.csv` in `archive_dir`, one row per message the sweep
