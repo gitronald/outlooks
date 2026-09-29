@@ -13,33 +13,85 @@ the mailbox so that the archive fills itself.
 
 ## Install
 
-```bash
-uv add git+https://github.com/gitronald/outlooks
-uv run outlooks install     # the /outlooks skill stub, under .claude/skills/
-uv run outlooks hook --apply  # the capture hook script + its settings entry
-```
-
 Python 3.11 or later. `render` needs [pandoc](https://pandoc.org) on the PATH.
 
-`uv add git+...` adds an unpinned source to the main dependencies, and a CI
-job with no access to this repository cannot clone it. To pin a release and
-keep it out of CI, put it in its own dependency group:
+There are two recipes, one for each way a repo uses the package. Both pin a
+release.
+
+### Operator only
+
+The repo runs the commands, the skill, and the capture hook from an
+interactive session, and none of its own code imports `outlooks`. Put the
+package in a dependency group of its own, so it is installed for the
+operator and the repo's package cannot come to depend on it by accident:
 
 ```toml
 [dependency-groups]
-mailbox = ["outlooks"]
+mailbox = ["outlooks==X.Y.Z"]
 
 [tool.uv]
 default-groups = ["dev", "mailbox"]
+```
 
+### Importing
+
+The repo's own code or tests `import outlooks` (see [Python API](#python-api)).
+It is a plain dependency:
+
+```bash
+uv add "outlooks==X.Y.Z"
+```
+
+### Either way
+
+```bash
+uv sync
+uv run outlooks install       # the /outlooks skill stub, under .claude/skills/
+uv run outlooks hook --apply  # the capture hook script and its settings entry
+uv run outlooks doctor        # every check reads ok
+```
+
+Where the package index cannot be used, the same release installs from its
+tag. Keep the dependency as above and add a source:
+
+```toml
 [tool.uv.sources]
 outlooks = { git = "https://github.com/gitronald/outlooks", tag = "vX.Y.Z" }
 ```
 
-In CI, sync with `uv sync --frozen --no-group mailbox` and set `UV_NO_SYNC=1`
-for the job, or a later `uv run` re-syncs the default groups and fails on the
-clone. CI never installs `outlooks` under this setup, so nothing in the
-consuming package may import it: only the operator's session runs it.
+A git source cannot be resolved on a network that allows only the package
+index, and it pins one tag, not a version range, so the index is the first
+choice.
+
+### In CI
+
+`outlooks doctor` makes no connector call, so CI can run it. It checks what
+the repo commits: the `[tool.outlooks]` table, the profile, the archive, and,
+under `.claude/`, the hook script, `settings.json`, and the skill stub.
+
+```yaml
+- run: uv sync --frozen
+- run: uv run outlooks doctor
+```
+
+## Upgrade
+
+```bash
+# 1. change the version (or the tag) in pyproject.toml, then
+uv lock --upgrade-package outlooks
+uv sync
+uv run outlooks hook --apply   # rewrites a hook script an earlier release wrote
+uv run outlooks install        # rewrites the skill stub for the new version
+uv run outlooks doctor
+```
+
+Read the changelog's *Changed* and *Removed* entries for every release
+between the two versions first: they say what a consuming repo has to do.
+
+The lock file is the pin that holds. For a release from the index it records
+the version and the hashes of its files, and for a git source the commit the
+tag resolved to, so `uv sync --frozen` installs the same code whatever
+happens upstream.
 
 ## Configure
 
@@ -71,6 +123,24 @@ The `profile` is repo-owned prose the skill reads for what this package cannot
 know: where a name resolves, how the sweep classifies, what filing a candidate
 means, and which of the repo's own records a message can contradict. `uv run
 outlooks doc profile-template` prints the headings it should answer.
+
+## Trying it without touching the archive
+
+Every path is a setting, and every setting has an `OUTLOOKS_*` override, so
+any command runs against a copy. To see what `import --replace` would
+rewrite before it rewrites anything:
+
+```bash
+cp -r data/outlook temp/outlook-trial
+OUTLOOKS_ARCHIVE_DIR=temp/outlook-trial \
+OUTLOOKS_SCRATCH_DIR=temp/outlook-trial-scratch \
+  uv run outlooks import --replace
+git diff --no-index data/outlook temp/outlook-trial
+```
+
+The captures are only read, so `captured_dir` can stay as it is.
+`outlooks config` run with the same variables shows each path and that it
+came from the environment.
 
 ## The archive
 
@@ -187,6 +257,36 @@ def facts(payload):
 and `text` (the body as plain text for a message read in full, the summary
 for a search hit).
 
+## Testing against it
+
+A consuming repo's tests pin every setting through `OUTLOOKS_*` in a
+fixture, so they never read the repo's own `[tool.outlooks]` table, its
+archive, or the zone of the machine they run on:
+
+```python
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def outlooks_settings(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OUTLOOKS_MAILBOX", "desk@example.org")
+    monkeypatch.setenv("OUTLOOKS_OWN_ADDRESSES", "desk@example.org")
+    monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", "notices@system.example.org")
+    monkeypatch.setenv("OUTLOOKS_DECISION_TAG", "[Decision]")
+    monkeypatch.setenv("OUTLOOKS_TIMEZONE", "America/Los_Angeles")
+    monkeypatch.setenv("OUTLOOKS_ARCHIVE_DIR", str(tmp_path / "archive"))
+    monkeypatch.setenv("OUTLOOKS_CAPTURED_DIR", str(tmp_path / "captured"))
+    monkeypatch.setenv("OUTLOOKS_SCRATCH_DIR", str(tmp_path / "scratch"))
+    monkeypatch.delenv("OUTLOOKS_PROFILE", raising=False)
+    monkeypatch.delenv("OUTLOOKS_RENDER_LABEL", raising=False)
+```
+
+The settings are resolved again whenever the working directory or an
+`OUTLOOKS_*` variable changes, so a test that sets one more variable gets
+it. A test that needs an archive writes its own messages under `tmp_path`
+in the connector's shape, with invented senders.
+
 ## Development
 
 ```bash
@@ -200,3 +300,14 @@ uv run pyrefly check
 The tests use synthetic fixtures only (`example.org` addresses and an invented
 cast), and every test runs in its own temporary directory with its settings
 pinned through `OUTLOOKS_*`, so the suite never reads a real archive.
+
+### Releases
+
+A published tag never moves. A fix ships as the next version, under its own
+changelog heading, because a consuming repo's lock file names the commit a
+tag resolved to, and a tag that moved would leave two repos on the same
+version running different code.
+
+The changelog's preamble lists what counts as a change a consuming repo has
+to hear about. Each such change is entered under *Changed* or *Removed*,
+with what to do.

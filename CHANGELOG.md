@@ -55,6 +55,11 @@ what a consuming repo has to do about it:
   `file`, `ledger`, and `report`). A repo's own skill or profile cites a step
   by name, which a renumbering does not change; `outlooks doc
   profile-template` says so. A test pins the names and their order per mode.
+- The README gives one install recipe for a repo that only runs the
+  commands and one for a repo that imports the package, an upgrade recipe
+  that ends in `outlooks doctor`, a CI example, how to run any command
+  against a copy of the archive, and the fixture a consuming repo's tests
+  pin the settings with.
 
 ### Changed
 

@@ -210,3 +210,67 @@ def test_readme_refining_example_runs():
     assert facts(notice("Ticket #12 was closed.")) == ("system-other", None)
     inquiry = json.loads((FIXTURES / "inquiry.json").read_text("utf-8"))
     assert facts(inquiry) == ("arrival", None)
+
+
+# --- the commands -----------------------------------------------------------------
+
+# A command's name is part of the interface: a repo's skill, its CI, and its
+# operator's habits all name it.
+COMMANDS = {
+    "audit",
+    "check",
+    "config",
+    "coverage",
+    "doc",
+    "doctor",
+    "hash",
+    "hook",
+    "import",
+    "install",
+    "lookup-reset",
+    "permissions",
+    "render",
+    "save",
+    "senders",
+    "skill",
+    "split",
+    "totals",
+    "windows",
+    "worklist",
+}
+WINDOWS = {"init", "fill", "split", "batches", "remaining"}
+
+
+def commands():
+    from typer.core import TyperGroup
+    from typer.main import get_command
+
+    from outlooks.cli import app
+
+    group = get_command(app)
+    assert isinstance(group, TyperGroup)
+    return group.commands
+
+
+def test_command_names_are_pinned():
+    found = commands()
+    assert set(found) == COMMANDS
+    windows = found["windows"]
+    assert set(getattr(windows, "commands", {})) == WINDOWS
+
+
+def test_readme_lists_every_command():
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    section = text.split("\n## Commands\n", 1)[1].split("\n## ", 1)[0]
+    for name in COMMANDS:
+        assert f"`outlooks {name}" in section, name
+    assert "`outlooks windows init/fill/split/batches/remaining`" in section
+
+
+def test_readme_fixture_pins_every_setting_the_suite_pins():
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    section = text.split("\n## Testing against it\n", 1)[1].split("\n## ", 1)[0]
+    conftest = (ROOT / "tests" / "conftest.py").read_text(encoding="utf-8")
+    pinned = set(re.findall(r'"(OUTLOOKS_[A-Z_]+)"', conftest))
+    assert pinned == set(re.findall(r'"(OUTLOOKS_[A-Z_]+)"', section))
+    assert {name.removeprefix("OUTLOOKS_").lower() for name in pinned} == set(KEYS)
