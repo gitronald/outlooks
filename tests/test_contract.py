@@ -1,7 +1,8 @@
 """The Python API a consuming repo may import, pinned.
 
-A repo that imports this package depends on these names and on the parameter
-names of these functions. A failure here is a change a consumer must hear
+A repo that imports this package depends on these names, and on the names of
+these functions' parameters, which of them it may leave out, and that it may
+pass each by position or by name. A failure here is a change a consumer must hear
 about: make it deliberately, edit this file with it, and give it a changelog
 entry under *Changed* or *Removed*.
 """
@@ -21,17 +22,20 @@ import outlooks
 ROOT = Path(__file__).parent.parent
 FIXTURES = Path(__file__).parent / "fixtures" / "outlook"
 
-# module -> public name -> parameter names (a function), field names (a
-# dataclass), or None (an exception or a constant).
+# module -> public name -> parameters (a function), field names (a
+# dataclass), or None (an exception or a constant). A parameter is written as
+# a call may give it: ``name`` when it is required, ``name=`` when it has a
+# default, and with a leading ``*`` or a trailing ``/`` if it ever stops being
+# passable both by position and by name.
 PUBLIC = {
     "store": {
         "StoreError": None,
         "archive_root": (),
         "id_hash": ("internet_message_id",),
         "stable": ("payload",),
-        "load_hits": ("root",),
-        "load_messages": ("root",),
-        "newest_hit": ("root", "mailbox"),
+        "load_hits": ("root=",),
+        "load_messages": ("root=",),
+        "newest_hit": ("root=", "mailbox="),
     },
     "classify": {
         "Mail": (
@@ -48,14 +52,14 @@ PUBLIC = {
             "mailbox",
         ),
         "Facts": ("role", "outcome", "extra"),
-        "view": ("payload", "mailbox"),
+        "view": ("payload", "mailbox="),
         "classify": ("mail",),
         "is_reply": ("subject",),
         "thread_subject": ("subject",),
     },
     "detail": {
         "detail": ("message",),
-        "details_by_id": ("root",),
+        "details_by_id": ("root=",),
         "body_text": ("message",),
     },
     "config": {
@@ -77,14 +81,14 @@ PUBLIC = {
         "ConfigError": None,
         "KEYS": None,
         "DEFAULTS": None,
-        "load": ("start",),
+        "load": ("start=",),
         "settings": (),
         "mailbox": (),
         "archive_dir": (),
         "captured_dir": (),
         "scratch_dir": (),
         "zone": (),
-        "zone_label": ("when",),
+        "zone_label": ("when=",),
     },
 }
 
@@ -114,6 +118,20 @@ def module(name):
     return importlib.import_module(f"outlooks.{name}")
 
 
+def written(parameter):
+    """A parameter as :data:`PUBLIC` writes it."""
+    kind = parameter.kind
+    mark = {
+        kind.POSITIONAL_ONLY: "{}/",
+        kind.POSITIONAL_OR_KEYWORD: "{}",
+        kind.VAR_POSITIONAL: "*{}",
+        kind.KEYWORD_ONLY: "*{}",
+        kind.VAR_KEYWORD: "**{}",
+    }[kind]
+    default = "" if parameter.default is parameter.empty else "="
+    return mark.format(parameter.name + default)
+
+
 @pytest.mark.parametrize("name", sorted(PUBLIC))
 def test_all_names_exactly_the_public_names(name):
     assert sorted(module(name).__all__) == sorted(PUBLIC[name])
@@ -130,7 +148,16 @@ def test_public_name_keeps_its_parameters(name, attr):
     if dataclasses.is_dataclass(found):
         assert tuple(f.name for f in dataclasses.fields(found)) == want
     else:
-        assert tuple(inspect.signature(found).parameters) == want
+        parameters = inspect.signature(found).parameters.values()
+        assert tuple(written(p) for p in parameters) == want
+
+
+def test_a_parameter_is_written_with_its_default_and_its_kind():
+    def f(a, /, b, c=None, *, d, e=1):
+        return a, b, c, d, e
+
+    parameters = inspect.signature(f).parameters.values()
+    assert tuple(written(p) for p in parameters) == ("a/", "b", "c=", "*d", "*e=")
 
 
 def test_every_other_module_says_it_is_internal():
