@@ -35,13 +35,18 @@ __all__ = [
     "view",
 ]
 
-# What an automatic reply's subject opens with, with or without a separator
-# after it. Both patterns are built from it, so a subject that reads as
-# automatic always reads as a reply.
-AUTO_PHRASE = r"(?:auto(?:matic)?[\s-]?(?:reply|response)|out of (?:the )?office)\b"
+# What an automatic reply's subject opens with: the phrase, then what ends it.
+# A colon ends it, as does a run of dashes with a space after it, or the end
+# of the subject. Words after the bare phrase do not: a person writes ``Out of
+# office coverage`` too. Both patterns are built from it, so a subject that
+# reads as automatic always reads as a reply.
+AUTO_PHRASE = (
+    r"(?:auto(?:matic)?[\s-]?(?:reply|response)|out of (?:the )?office)"
+    r"\s*(?::|[\u2013\u2014-]+(?=\s|$)|$)"
+)
 REPLY_PREFIX = re.compile(
     r"^\s*(?:(?:re|aw|fw|fwd|wg|sv|antw|undeliverable)\s*:|\[external\]"
-    rf"|{AUTO_PHRASE}\s*[:\u2013\u2014-]?)\s*",
+    rf"|{AUTO_PHRASE})\s*",
     re.I,
 )
 AUTO_REPLY = re.compile(rf"^\s*(?:\[external\]\s*)*{AUTO_PHRASE}", re.I)

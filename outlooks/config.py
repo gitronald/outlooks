@@ -27,7 +27,9 @@ list key takes a comma-separated value):
 
 An entry of ``system_senders`` or ``notice_senders`` is an address, or a
 pattern in which ``*`` stands for any run of characters (``postmaster@*``),
-for a sender that writes from many addresses.
+for a sender that writes from many addresses. An address belongs to one list:
+one of ``own_addresses`` is ours whatever a pattern matches, and an address
+both sender lists match is a notice sender.
 
 Relative paths resolve against the directory of that ``pyproject.toml`` (the
 working directory when no file holds the table), so a command run from a
@@ -241,20 +243,43 @@ def _entry(entry: str) -> re.Pattern[str]:
     return re.compile(".*".join(re.escape(part) for part in entry.split("*")), re.I)
 
 
-def _listed(address: str, entries: Iterable[str]) -> bool:
-    """Whether ``address`` is one of ``entries``; ``*`` in an entry is any run."""
-    address = address.strip()
-    return bool(address) and any(_entry(e).fullmatch(address) for e in entries)
+def _list_of(address: str) -> str | None:
+    """The one list ``address`` belongs to; ``*`` in an entry is any run.
+
+    The first that has it, of ``own_addresses``, ``notice_senders``, and
+    ``system_senders``: every module reads the same order from here.
+    """
+    s = settings()
+    address = address.strip().lower()
+    if not address:
+        return None
+    if address in s.own_addresses:
+        return "own_addresses"
+    lists: tuple[tuple[str, Iterable[str]], ...] = (
+        ("notice_senders", s.notice_senders),
+        ("system_senders", s.system_senders),
+    )
+    for key, entries in lists:
+        if any(_entry(e).fullmatch(address) for e in entries):
+            return key
+    return None
 
 
 def is_system_sender(address: str) -> bool:
-    """Whether ``address`` is one of ``system_senders``: it speaks for us."""
-    return _listed(address, settings().system_senders)
+    """Whether ``address`` is a system sender: it speaks for us.
+
+    One of ``system_senders`` that is neither one of ``own_addresses`` nor
+    one of ``notice_senders``.
+    """
+    return _list_of(address) == "system_senders"
 
 
 def is_notice_sender(address: str) -> bool:
-    """Whether ``address`` is one of ``notice_senders``: it writes to us."""
-    return _listed(address, settings().notice_senders)
+    """Whether ``address`` is a notice sender: it writes to us.
+
+    One of ``notice_senders`` that is not one of ``own_addresses``.
+    """
+    return _list_of(address) == "notice_senders"
 
 
 def archive_dir() -> Path:
