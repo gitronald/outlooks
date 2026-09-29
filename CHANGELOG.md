@@ -29,10 +29,12 @@ what a consuming repo has to do about it:
   name what a consuming repo may import in `__all__`, listed in the README's
   "Python API" section with a reading example and an example of refining a
   `system` role in the repo's own wrapper. Every other module says in its
-  docstring that it is internal. A contract test pins the names and each
-  function's parameter names.
+  docstring that it is internal. A contract test pins the names, and each
+  function's parameter names, which of them have a default, and how each
+  may be passed.
 - `outlooks coverage --ledger <path>` reads a ledger kept somewhere other
-  than `ledger.csv` in `archive_dir`.
+  than `ledger.csv` in `archive_dir`. A path that is not a file is an error
+  (exit 1), never an empty ledger.
 - `outlooks lookup-reset <name>` moves a lookup's page and timeline files
   to `earlier/{timestamp}/` under `scratch_dir` and prints what it moved, so
   a repeat lookup of a name never merges the last one's pages. It deletes
@@ -66,18 +68,30 @@ what a consuming repo has to do about it:
 - `outlooks coverage` ends with one more line, `next sweep from`, giving the
   instant the next sweep passes as `afterDateTime`, in UTC: the earlier of
   the ledger's high-water mark less five minutes and the end of recorded
-  coverage. The sweep reads it, where it used to compute it. A tool that
-  reads the footer should find each line by its label, not its position.
+  coverage. The sweep reads it, where it used to compute it. With an empty
+  ledger the line is the end of recorded coverage, and the sweep still asks
+  the operator where to start, because the archived mail before that instant
+  has never been classified. A tool that reads the footer should find each
+  line by its label, not its position.
 - `outlooks import` names the fields that differ on a `DIFFERS` line (`DIFFERS
   from the stored copy in body.content, attachments[].uri: <path>`) and no
   longer says `(--replace rewrites)`. A tool that matches the line should
   match on `DIFFERS from the stored copy` and take the path after the last
-  `: `. The README says when `--replace` is the fix.
+  `: `. The line names no field, `DIFFERS from the stored copy: <path>`,
+  when the stored copy is not JSON. The README says when `--replace` is the
+  fix.
 - `outlooks check` prints why a row is `BAD` on a line of its own under the
   row: `missing key date_local` (or `internet_message_id`), `not archived`,
   or the two dates that disagree. A timeline file with no
   `internet_message_id` used to stop the command with a traceback, and one
   with no `date_local` read as a date mismatch. The exit code is unchanged.
+
+### Fixed
+
+- `outlooks split <name>` no longer merges the page files of another lookup
+  whose name starts with `<name>-` (`smith` and `smith-jones`). A page file
+  is the name, one of the searchers' kinds (`sender`, `title`, `sent`) or
+  none, and `page-{n}.json`.
 
 ## [0.1.0] - 2026-09-27
 
