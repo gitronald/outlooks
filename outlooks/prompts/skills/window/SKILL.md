@@ -18,7 +18,11 @@ message in the range in full.
 The other modes: `{cli} skill lookup` (the full correspondence with one
 person) and `{cli} skill sweep` (what is new since the last run).
 
-## 0. Before anything else
+Every step has a fixed name, given where the step starts as step `name`.
+Another skill or a profile that refers to a step cites it by that name
+(the window's `pull-import` step), which stays the same when steps are added or renumbered.
+
+## 0. Before anything else (step `setup`)
 
 1. Run `{cli} config` and read the mailbox, zone, and paths it prints
    (`archive_dir`, `captured_dir`, `scratch_dir`).
@@ -35,8 +39,8 @@ With no `mailbox` configured (the signed-in account's own), read "Personal
 mailbox" in `{cli} doc connector` first: its pages report no total, so the
 sizing in step 2 and the planner below do not apply.
 
-1. `{cli} coverage` to see the gaps, unless the operator named the range.
-2. Split the range into windows of at most about 175 messages (seven pages,
+1. **Step `pull-gaps`.** `{cli} coverage` to see the gaps, unless the operator named the range.
+2. **Step `pull-size`.** Split the range into windows of at most about 175 messages (seven pages,
    one pager's budget; see step 3): the search sorts newest first and pages
    by `nextOffset`, and a small window keeps one coverage row cheap to
    re-pull. For a range never pulled before, **size it first**: one `haiku`
@@ -80,7 +84,7 @@ sizing in step 2 and the planner below do not apply.
    that `git diff` of `coverage.csv` holds only your rows, the coverage
    file — and leave the archive's `messages/` to the session that read
    them. Split the work by year, so no month is paged or read by both.
-3. For each window, call `outlook_email_search` with `mailboxOwnerEmail`,
+3. **Step `pull-page`.** For each window, call `outlook_email_search` with `mailboxOwnerEmail`,
    `afterDateTime`, `beforeDateTime`, `limit: 25`, and `offset` — **nothing
    else**: a `query`, `sender`, or `folderName` makes it a lookup, which
    never counts as coverage. Page with `nextOffset` until
@@ -97,7 +101,7 @@ sizing in step 2 and the planner below do not apply.
    instead of halving it by hand; `import` flags a first pull that ran out
    mid-window as `INCOMPLETE` and `{cli} worklist` a short re-pull, so never
    trust a pager's own count.
-4. `{cli} import`. A new window prints `COVERED`; one already in
+4. **Step `pull-import`.** `{cli} import`. A new window prints `COVERED`; one already in
    `coverage.csv` (a re-pull of the same bounds and total) is only counted
    in the closing `complete windows already recorded` line, which is also
    success. `INCOMPLETE` is listed only for a window outside the recorded
@@ -108,7 +112,7 @@ sizing in step 2 and the planner below do not apply.
    cannot recover (a spilled result whose file and copy are both gone, or a
    response of no known shape): it is never read as an empty window, so
    call that page again.
-5. `{cli} coverage` and report what closed and what remains. Commit the
+5. **Step `pull-report`.** `{cli} coverage` and report what closed and what remains. Commit the
    archive (hits and `coverage.csv`).
 
 Full reads are not part of this mode unless the operator asks for them
@@ -123,7 +127,7 @@ window pull as above, driven in a loop by `{cli} windows` instead of by
 hand. Its state lives in `windows/windows.json` under `scratch_dir`, beside
 the captures.
 
-1. **Check the hook first.** `{cli} hook` confirms the script and settings
+1. **Step `collect-hook`.** **Check the hook first.** `{cli} hook` confirms the script and settings
    entry are in place; then make one search call and confirm a new file
    appeared in the captures directory before paging anything. A change to
    the hook takes effect mid-session, no restart needed. The allow rules
@@ -131,7 +135,7 @@ the captures.
    (see `{cli} doc connector`), keep the auto-mode classifier from blocking
    subagents' reads; never widen either to a write tool.
 
-2. **Start the plan.**
+2. **Step `collect-init`.** **Start the plan.**
 
    ```bash
    {cli} windows init AFTER [BEFORE]
@@ -146,7 +150,7 @@ the captures.
    starts: one `limit: 1` probe from `2000-01-01` to `AFTER` proves nothing
    is earlier; an empty result is a covered window of 0 once `import` runs.
 
-3. **Size.** Probe the `range` line and every month `init` printed with
+3. **Step `collect-size`.** **Size.** Probe the `range` line and every month `init` printed with
    the one-`haiku`-agent sizing call described above (`limit: 1` each),
    pointed at these bounds. Then
 
@@ -161,7 +165,7 @@ the captures.
    capture (a failed or throttled call leaves none), so probe it again,
    never assume 0.
 
-4. **Split until everything fits.**
+4. **Step `collect-split`.** **Split until everything fits.**
 
    ```bash
    {cli} windows split
@@ -175,7 +179,7 @@ the captures.
    seconds. An `unsplittable` line on stderr is a window under two seconds
    still over 175: report it, don't page it.
 
-5. **Page in rounds.**
+5. **Step `collect-page`.** **Page in rounds.**
 
    ```bash
    {cli} windows batches
@@ -190,7 +194,7 @@ the captures.
    minute, now and then far longer. Search calls share the throttle with
    reads, so never page during a read round.
 
-6. **Import and diff, never count reports.** After each round,
+6. **Step `collect-import`.** **Import and diff, never count reports.** After each round,
 
    ```bash
    {cli} import
@@ -201,7 +205,7 @@ the captures.
    cover one window of a batch of several. Run `batches` again for the next
    round (it replaces the old pager files) until `remaining` prints nothing.
 
-7. **Prove it.**
+7. **Step `collect-prove`.** **Prove it.**
 
    ```bash
    {cli} totals --check AFTER BEFORE
@@ -224,12 +228,12 @@ directly with the pager brief, because `batches` skips covered windows.
 
 "Download all of August" is a separate fan-out:
 
-1. **Re-pull the range first** (steps 3 and 4 of [Pull a
+1. **Step `read-repull`.** **Re-pull the range first** (steps 3 and 4 of [Pull a
    window](#pull-a-window), one `haiku` pager per month), even when it is
    already covered. A uri goes stale when mail is moved, and a stale one
    comes back "not found"; a fresh pull costs a couple of minutes and
    leaves none to miss.
-2. **Build the worklists** from the captures:
+2. **Step `read-worklist`.** **Build the worklists** from the captures:
 
    ```bash
    {cli} worklist --after 2026-08-01 --before 2026-09-01 --out <scratch>/aug --name aug
@@ -252,7 +256,7 @@ directly with the pager brief, because `batches` skips covered windows.
    re-pull that lost a page, which `import` only reports as "already
    recorded"): re-page it and import first. A short re-pull that reports
    the same total as the old one merges with it and is not caught.
-3. **Launch at most eight `sonnet` readers at once, one per batch, in one
+3. **Step `read-launch`.** **Launch at most eight `sonnet` readers at once, one per batch, in one
    message**, each with the one-sentence prompt: run
    `{cli} doc window/bulk-reader-brief` and follow it; your worklist is
    `<path>`; cat it first; work from the repo root. The bulk brief writes no
@@ -268,7 +272,7 @@ directly with the pager brief, because `batches` skips covered windows.
    connector: every capture carries its `session_id`, so captures in the
    last minute from a session other than this one mean the budget is
    already shared; run fewer readers or wait for it to finish.
-4. **Import, then re-run `{cli} worklist`**: what it prints is the next
+4. **Step `read-import`.** **Import, then re-run `{cli} worklist`**: what it prints is the next
    round. Count from the captures, never from the readers' reports.
    Rebuild only between rounds, and only once every reader's task has
    *completed*: a reader's report can arrive before it stops, and one that
@@ -284,7 +288,7 @@ directly with the pager brief, because `batches` skips covered windows.
    stragglers (still well under the twenty reads that fill a reader).
    Commit the archive's `messages/` after each round's import, so a stopped
    run loses nothing.
-5. **Check the period's attachments** with
+5. **Step `read-audit`.** **Check the period's attachments** with
    `{cli} audit <year> --sweep <file>`: it lists attachments no capture
    ever tried (a reader skipped it, or stopped partway through a message)
    and writes them as a worklist for one sweep reader, launched on the bulk

@@ -18,7 +18,11 @@ The other modes: `{cli} skill sweep` (what is new since the last run) and
 a lookup, because deciding whether a sender is new is exactly the lookup
 question.
 
-## 0. Before anything else
+Every step has a fixed name, given where the step starts as step `name`.
+Another skill or a profile that refers to a step cites it by that name
+(the lookup's `split` step), which stays the same when steps are added or renumbered.
+
+## 0. Before anything else (step `setup`)
 
 1. Run `{cli} config` and read the mailbox, own addresses, system senders,
    zone, and paths it prints. Every path below (`archive_dir`,
@@ -32,7 +36,7 @@ question.
    resolves, and its *Cross-checks* section says what the repo's records
    assert and which source wins when the mail disagrees.
 
-## 1. Resolve who
+## 1. Resolve who (step `resolve`)
 
 Turn each name the operator gives into a search term. Prefer the **address
 local-part** (the part before `@`) — it is the sharpest key and immune to
@@ -47,7 +51,7 @@ Addresses come from the registries the profile names. If the operator names
 someone with no address on file, search the surname and confirm from the
 hits.
 
-## 2. Pull each person's mail
+## 2. Pull each person's mail (step `pull`)
 
 One call per person:
 
@@ -71,7 +75,7 @@ answer.
 In practice the calls go through subagents (see [Running a lookup through
 subagents](#running-a-lookup-through-subagents)); the shapes are the same.
 
-## 3. Fill gaps only if the picture is incomplete
+## 3. Fill gaps only if the picture is incomplete (step `gaps`)
 
 - Missing our side, or the thread looks truncated →
   `folderName: "Sent Items"` + the same `query`.
@@ -83,7 +87,7 @@ subagents](#running-a-lookup-through-subagents)); the shapes are the same.
   messages the search didn't surface. Treat a quoted copy as a lead, not
   proof it was sent from this mailbox — confirm it with a search.
 
-## 4. Report a timeline
+## 4. Report a timeline (step `timeline`)
 
 One row per message, oldest first, in the configured **zone**:
 
@@ -147,7 +151,7 @@ moved. It deletes nothing.
 
 The split:
 
-1. **Search** — up to four `sonnet` subagents per person, launched together
+1. **Step `search`.** Search — up to four `sonnet` subagents per person, launched together
    in one message:
    - the **query** searcher: the `query: <local-part or surname>` call of
      step 2 above, paged by `nextCursor`;
@@ -196,7 +200,7 @@ The split:
    person only ever wrote through a web form, say): the searcher
    reports it once, does not re-run the call to confirm, and has no page to
    save. The brief says so, or it would retry.
-2. **Split known from unread** (main session): import the searchers'
+2. **Step `split`.** Split known from unread (main session): import the searchers'
    captures, then split.
 
    ```bash
@@ -222,7 +226,7 @@ The split:
    archived therefore launches no readers at all. The archive is never a
    substitute for the search, though: it can only say what was seen before,
    not what arrived since.
-3. **Read** — fan out on `sonnet` in **batches of two messages**, one
+3. **Step `read`.** Read — fan out on `sonnet` in **batches of two messages**, one
    subagent per batch, over the `READ` lines only, at most eight at once
    (one limit covers reads and searches from every agent and session on the
    account; the measured rates are in `{cli} skill window`): a lookup with
@@ -254,7 +258,7 @@ The split:
    free), but only messages from the current matter's window are read in
    full — the older threads answer a different question. Say in the report
    that they exist and were left unread.
-4. **Decide** (main session): run `{cli} import` to archive the readers'
+4. **Step `decide`.** Decide (main session): run `{cli} import` to archive the readers'
    captures, then merge the timeline files, recompute each `date_local` from
    the archived `receivedDateTime` rather than trusting the reader's, check
    every archived file exists, write the report ("Report a timeline",
@@ -296,7 +300,7 @@ that its timeline file is a report, not a decision — `direction` and
 the local dates, the file list, and that no `.txt` sits beside a message
 whose attachments are all images.
 
-## 5. Offer to keep it (optional)
+## 5. Offer to keep it, optionally (step `keep`)
 
 A lookup that turned up history worth keeping ends with an offer, not a
 write. If the profile names a place the repo keeps per-record mailbox history

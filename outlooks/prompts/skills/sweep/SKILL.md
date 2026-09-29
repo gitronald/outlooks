@@ -17,7 +17,11 @@ person) and `{cli} skill window` (page or read a whole date range). A sweep
 often ends in a lookup, because deciding whether a sender is new is exactly
 the lookup question.
 
-## 0. Before anything else
+Every step has a fixed name, given where the step starts as step `name`.
+Another skill or a profile that refers to a step cites it by that name
+(the sweep's `classify` step), which stays the same when steps are added or renumbered.
+
+## 0. Before anything else (step `setup`)
 
 1. Run `{cli} config` and read the mailbox, own addresses, system senders,
    zone, and paths it prints.
@@ -37,7 +41,7 @@ the lookup question.
    mixes two vocabularies. Whichever word the profile maps to `deferred`
    keeps its meaning: its rows come back into the next worklist.
 
-## 1. Sweep
+## 1. Sweep (step `sweep`)
 
 Run `{cli} coverage` and read its last line, `next sweep from`: the
 instant to pass as `afterDateTime`, already in UTC. Pass it as printed.
@@ -79,7 +83,7 @@ window start is inclusive, so the newest ledger message usually comes back
 once. Then add the ledger's `deferred` rows back as open candidates. They
 sit before the window, so the sweep itself won't return them.
 
-## 2. Classify
+## 2. Classify (step `classify`)
 
 Sort each remaining hit into one `kind` (step 0 names the column). The search hit's metadata is
 usually enough; do a full `read_resource` only when the summary can't settle
@@ -114,7 +118,7 @@ one `query: <surname or address local-part>` call settles it in both
 directions (`{cli} skill lookup`, step 2). It also answers the other
 question a candidate raises: whether we have already replied.
 
-## 3. Match candidates
+## 3. Match candidates (step `match`)
 
 For each candidate, do a full `read_resource` on its `uri` and on every
 text-bearing attachment's `uri` — the hook captures each read, and step 5's
@@ -126,7 +130,7 @@ anything the profile asks to be checked or proposed for each candidate
 (where it would be filed, how it would be named, which of the repo's
 required questions it leaves unanswered). Don't fill a gap yourself.
 
-## 4. Worklist — stop here for approval
+## 4. Worklist — stop here for approval (step `worklist`)
 
 Present one table before anything is written: every candidate, plus a
 one-line count of skipped messages by kind (so the operator can spot a
@@ -143,7 +147,7 @@ Wait for the operator's go-ahead, and follow any redirects ("skip this
 one", "file it as the other kind", a different destination). Everything
 after this writes to shared state.
 
-## 5. File each approved candidate
+## 5. File each approved candidate (step `file`)
 
 Filing is **the profile's filing step** (*Filing an approved candidate*):
 the repo's own skill or procedure, which this skill does not replace. Follow
@@ -174,7 +178,7 @@ With no filing step in the profile, stop at the worklist: record the
 approved candidates in the ledger as the operator directs, and list them in
 the report for the operator to act on.
 
-## 6. Ledger
+## 6. Ledger (step `ledger`)
 
 Append each candidate's row to the ledger **as soon as that candidate is
 filed** — inside step 5, not after the whole batch. A filing step that
@@ -203,7 +207,7 @@ later, update that row's `outcome` rather than adding a second one.
 Keep the ledger sorted by `received`, write it with LF line endings, and
 quote fields that contain commas.
 
-## 7. Report
+## 7. Report (step `report`)
 
 Summarize what was filed (with the links the filing step returned), what
 was skipped (counts by kind), what the operator still has to do by hand

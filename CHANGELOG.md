@@ -39,6 +39,11 @@ what a consuming repo has to do about it:
   nothing, and the lookup skill runs it before launching searchers.
 - `outlooks doc lookup/timeline` lists every key of a lookup's timeline
   file, which of them `check` reads, and which are required.
+- Every step of the three modes has a fixed name, given where the step
+  starts (the sweep's are `setup`, `sweep`, `classify`, `match`, `worklist`,
+  `file`, `ledger`, and `report`). A repo's own skill or profile cites a step
+  by name, which a renumbering does not change; `outlooks doc
+  profile-template` says so. A test pins the names and their order per mode.
 
 ### Changed
 
