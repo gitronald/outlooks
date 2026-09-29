@@ -356,3 +356,14 @@ Not done: step 10. `PUBLISH_ENABLED` is still unset. Setting it makes the
 next tag push upload to the index, which cannot be undone, and whether the
 publisher was registered with the workflow file name `publish.yml` and the
 environment name `pypi` cannot be read from the repo.
+
+### 2026-09-29: publishing is enabled at the release, not before
+
+Logged 2026-09-29T02:20:29-07:00. The maintainer confirmed that the trusted
+publisher was registered with the workflow file name `publish.yml` and the
+environment name `pypi`, which is what the workflow in the repo uses, so the
+item the earlier entry left unverified is settled.
+
+`PUBLISH_ENABLED` stays unset until the release that carries this plan is
+cut. Step 10 is then one command, run before the tag is pushed:
+`gh variable set PUBLISH_ENABLED --body true`.
