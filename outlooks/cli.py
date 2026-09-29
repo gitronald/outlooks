@@ -2,6 +2,7 @@
 
     outlooks import [<capture-dir-or-file> ...] [--replace]
     outlooks coverage [--since YYYY-MM-DD] [--ledger <ledger.csv>]
+    outlooks senders [--since YYYY-MM-DD]
     outlooks save <message.json> [--text <attachment.txt>] | <hits.json> --hits
     outlooks render <message.json> --out <dir> [--text <att.txt>]
     outlooks split <name> --match <term> [--since] [--batches <dir>]
@@ -183,6 +184,39 @@ def coverage(
         skipped=cv.mass_copies(hits, cv.read_rows(cv.mass_sends_csv())),
     )
     typer.echo("\n".join(lines))
+
+
+@app.command()
+def senders(
+    mailbox: Annotated[str | None, typer.Option(help="Mailbox to report.")] = None,
+    since: Annotated[
+        str | None,
+        typer.Option(help="Count hits received on or after YYYY-MM-DD."),
+    ] = None,
+) -> None:
+    """Count the inbound hits by sender; mark each own, system, or unlisted."""
+    from datetime import date
+
+    from outlooks import senders as sd
+
+    box = _mailbox(mailbox)
+    start = None
+    if since:
+        try:
+            start = date.fromisoformat(since)
+        except ValueError:
+            raise _fail(f"{since!r} is not a YYYY-MM-DD date") from None
+    found = sd.senders(box, start)
+    scope = f" since {start.isoformat()}" if start else ""
+    total = sum(s.count for s in found)
+    typer.echo(f"senders for {box}{scope}: {total} inbound hits")
+    for s in found:
+        typer.echo(f"{s.count:6}  {s.mark:8}  {s.address or '(no sender)'}")
+    unlisted = sum(1 for s in found if s.mark == "unlisted")
+    typer.echo(
+        f"{unlisted} unlisted; an address that is a notifier, not a person, "
+        "belongs in system_senders"
+    )
 
 
 @app.command()

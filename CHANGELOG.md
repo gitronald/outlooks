@@ -39,6 +39,10 @@ what a consuming repo has to do about it:
   nothing, and the lookup skill runs it before launching searchers.
 - `outlooks doc lookup/timeline` lists every key of a lookup's timeline
   file, which of them `check` reads, and which are required.
+- `outlooks senders [--since YYYY-MM-DD]` counts the archived inbound hits
+  by sender address, most frequent first, and marks each `own`, `system`, or
+  `unlisted`, so a notifier missing from `system_senders` is visible.
+  Read-only. The profile template's *Who we are* points at it.
 - Every step of the three modes has a fixed name, given where the step
   starts (the sweep's are `setup`, `sweep`, `classify`, `match`, `worklist`,
   `file`, `ledger`, and `report`). A repo's own skill or profile cites a step

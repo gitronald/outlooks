@@ -110,6 +110,7 @@ so one repair never rewrites anything else that differs.
 |---|---|
 | `outlooks import [paths] [--replace]` | file the hook's captures; record complete windows |
 | `outlooks coverage [--since] [--ledger]` | covered windows, gaps, unread counts, ledger lag, and the next sweep's start |
+| `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, or `unlisted` |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |
 | `outlooks lookup-reset <name>` | move a lookup's page and timeline files aside before a repeat lookup |

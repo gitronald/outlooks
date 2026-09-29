@@ -26,7 +26,11 @@ belongs.
 - The own addresses, and why each counts as *us* (an old address still
   receiving replies, a sibling mailbox the team sends from).
 - The system senders and what each one sends (a web form, a
-  ticketing system, a billing service). For each, the notification types
+  ticketing system, a billing service). `{cli} senders` is how to find
+  them: it counts the archived inbound mail by sender and marks each
+  address `own`, `system`, or `unlisted`, and a frequent `unlisted` address
+  that no person writes from is a notifier missing from `system_senders`.
+  Until it is listed, its mail is classified as a person's. For each, the notification types
   it sends, what can be parsed from each (a title, an id, a person's name
   and address), and which of them identify a party who must stay
   confidential (`{cli} doc queries`, B3, shows the shape).
