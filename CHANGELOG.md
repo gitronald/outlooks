@@ -23,6 +23,8 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
 ### Added
 
 - A declared Python API: `store`, `classify`, `detail`, and `config` each
