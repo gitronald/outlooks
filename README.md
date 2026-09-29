@@ -207,7 +207,7 @@ changelog under *Changed* or *Removed*.
 | Module | Public names |
 |---|---|
 | `outlooks.store` | `archive_root`, `id_hash`, `stable`, `load_hits`, `load_messages`, `newest_hit`, `StoreError` |
-| `outlooks.classify` | `Mail`, `Facts`, `view`, `classify`, `is_reply`, `thread_subject` |
+| `outlooks.classify` | `Mail`, `Facts`, `view`, `classify`, `is_reply`, `is_auto_reply`, `thread_subject` |
 | `outlooks.detail` | `detail`, `details_by_id`, `body_text` |
 | `outlooks.config` | `Settings`, `load`, `settings`, `KEYS`, `DEFAULTS`, `ConfigError`, `mailbox`, `archive_dir`, `captured_dir`, `scratch_dir`, `zone`, `zone_label` |
 
@@ -253,6 +253,10 @@ def facts(payload):
     found = OPENED.search(mail.text)
     return ("system-opened", int(found[1])) if found else ("system-other", None)
 ```
+
+A `followup` carries `extra["auto"]`, true for an automatic reply.
+`is_auto_reply(subject)` is the same test for a repo that has only the
+subject in hand.
 
 `Mail` carries what such a wrapper reads: `sender`, `recipients`, `subject`,
 and `text` (the body as plain text for a message read in full, the summary

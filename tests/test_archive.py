@@ -185,6 +185,44 @@ def test_thread_subject_strips_stacked_prefixes():
     )
 
 
+AUTOMATIC = (
+    "Automatic reply: Winter Soil",
+    "Automatic Response: Winter Soil",
+    "Auto-reply Winter Soil",
+    "Auto Reply - Winter Soil",
+    "AutoReply: Winter Soil",
+    "Auto response: Winter Soil",
+    "Out of Office: Winter Soil",
+    "Out of the office Winter Soil",
+    "[External] Automatic reply: Winter Soil",
+)
+NOT_AUTOMATIC = (
+    "Winter Soil",
+    "Re: Winter Soil",
+    "Re: Automatic reply: Winter Soil",
+    "Undeliverable: Winter Soil",
+    "Automatic watering for winter soil",
+    "Autoreplying to Winter Soil",
+    "Auto parts for a tiller",
+)
+
+
+@pytest.mark.parametrize("subject", AUTOMATIC)
+def test_an_automatic_reply_is_a_followup_flagged_auto(subject):
+    assert cl.is_auto_reply(subject)
+    assert cl.is_reply(subject)
+    assert cl.thread_subject(subject) == "winter soil"
+    hit = {**load("hits-page.json")[1], "subject": subject}
+    assert cl.classify(cl.view(hit)) == cl.Facts("followup", extra={"auto": True})
+
+
+@pytest.mark.parametrize("subject", NOT_AUTOMATIC)
+def test_any_other_subject_is_not_flagged_auto(subject):
+    assert not cl.is_auto_reply(subject)
+    hit = {**load("hits-page.json")[1], "subject": subject}
+    assert cl.classify(cl.view(hit)).extra.get("auto", False) is False
+
+
 def test_decision_with_nothing_after_the_tag_has_no_outcome():
     hit = {**load("hits-page.json")[2], "subject": "[Decision]:  "}
     assert cl.classify(cl.view(hit)) == cl.Facts("decision")

@@ -54,6 +54,7 @@ PUBLIC = {
         "Facts": ("role", "outcome", "extra"),
         "view": ("payload", "mailbox="),
         "classify": ("mail",),
+        "is_auto_reply": ("subject",),
         "is_reply": ("subject",),
         "thread_subject": ("subject",),
     },
