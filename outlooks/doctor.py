@@ -88,6 +88,9 @@ def _archive(start: Path) -> str:
                     raise ValueError(f"its columns are {reader.fieldnames}")
                 for row in reader:
                     rows += 1
+                    if None in row or None in row.values():
+                        cells = len(coverage.FIELDS)
+                        raise ValueError(f"it does not have the header's {cells} cells")
                     coverage.parse_ts(row["after"])
                     coverage.parse_ts(row["before"])
                     int(row["total"])
@@ -102,6 +105,10 @@ def _archive(start: Path) -> str:
                 if not line.strip():
                     continue
                 hit = json.loads(line)
+                if not isinstance(hit, dict):
+                    raise ValueError("not an object")
+                if not isinstance(hit["receivedDateTime"], str):
+                    raise ValueError("receivedDateTime is not a string")
                 coverage.parse_ts(hit["receivedDateTime"])
                 if not hit["internetMessageId"]:
                     raise ValueError("an empty internetMessageId")
@@ -119,12 +126,12 @@ def _hook_script(root: Path, start: Path) -> str:
     return str(hook.SCRIPT_PATH)
 
 
-def _hook_settings(root: Path, start: Path) -> str:
+def _hook_settings(root: Path) -> str:
     try:
-        state = hook.status(root, start)
+        state = hook.settings_state(root)
     except ValueError as e:
         raise _Failed(f"{hook.SETTINGS_PATH} does not parse: {e}") from None
-    if state.settings != "ok":
+    if state != "ok":
         raise _Failed(
             f"{hook.SETTINGS_PATH} has no PostToolUse entry running "
             f"{hook.SCRIPT_PATH.name}; run `uv run outlooks hook --apply`"
@@ -158,7 +165,7 @@ def run(start: Path | None = None) -> list[Result]:
         lambda: _profile(start),
         lambda: _archive(start),
         lambda: _hook_script(root, start),
-        lambda: _hook_settings(root, start),
+        lambda: _hook_settings(root),
         lambda: _stub(root),
     )
     results = []

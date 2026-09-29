@@ -154,15 +154,26 @@ class Status:
 
 
 def _entries(settings: dict[str, Any]) -> list[dict[str, Any]]:
-    return (settings.get("hooks") or {}).get("PostToolUse") or []
+    """The ``PostToolUse`` entries; ``ValueError`` when they are not a list of them."""
+    hooks = settings.get("hooks")
+    if hooks is None:
+        return []
+    if not isinstance(hooks, dict):
+        raise ValueError("`hooks` is not an object")
+    entries = hooks.get("PostToolUse")
+    if entries is None:
+        return []
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        raise ValueError("`hooks.PostToolUse` is not a list of objects")
+    return entries
 
 
 def _wired(settings: dict[str, Any]) -> bool:
     return any(
         entry.get("matcher") == MATCHER
         and any(
-            "outlook-capture.sh" in (h.get("command") or "")
-            for h in entry.get("hooks", [])
+            isinstance(h, dict) and "outlook-capture.sh" in (h.get("command") or "")
+            for h in entry.get("hooks") or []
         )
         for entry in _entries(settings)
     )
@@ -172,7 +183,10 @@ def _read_settings(root: Path) -> dict[str, Any]:
     path = root / SETTINGS_PATH
     if not path.is_file():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(settings, dict):
+        raise ValueError("it is not an object")
+    return settings
 
 
 def script_state(root: Path, start: Path | None = None) -> str:
@@ -183,10 +197,18 @@ def script_state(root: Path, start: Path | None = None) -> str:
     return _script_state(path.read_text(encoding="utf-8"), root, start)
 
 
+def settings_state(root: Path) -> str:
+    """The state of ``root``'s settings entry, as :class:`Status` names it.
+
+    ``ValueError`` when the settings file does not parse, or holds something
+    other than hook entries where they belong.
+    """
+    return "ok" if _wired(_read_settings(root)) else "missing"
+
+
 def status(root: Path, start: Path | None = None) -> Status:
     """Whether ``root`` has the capture script and the settings entry."""
-    wired = _wired(_read_settings(root))
-    return Status(script_state(root, start), "ok" if wired else "missing")
+    return Status(script_state(root, start), settings_state(root))
 
 
 def apply(root: Path, *, force: bool = False, start: Path | None = None) -> list[str]:

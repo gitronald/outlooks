@@ -143,6 +143,17 @@ def test_archive_fails_on_a_coverage_row_that_does_not_parse(repo):
     assert "coverage.csv, row 2" in failed(dr.run())["archive"]
 
 
+@pytest.mark.parametrize(
+    "row",
+    ["desk@example.org,2026-03-12T07:00:00Z\n", "desk@example.org,,,2,2,,extra\n"],
+)
+def test_archive_fails_on_a_coverage_row_of_another_length(repo, row):
+    table = repo / "data" / "outlook" / "coverage.csv"
+    table.write_text(table.read_text(encoding="utf-8") + row, encoding="utf-8")
+    note = failed(dr.run())["archive"]
+    assert "coverage.csv, row 2: it does not have the header's 6 cells" in note
+
+
 def test_archive_fails_on_coverage_columns_it_does_not_know(repo):
     table = repo / "data" / "outlook" / "coverage.csv"
     table.write_text("mailbox,after,before\n", encoding="utf-8")
@@ -155,6 +166,8 @@ def test_archive_fails_on_coverage_columns_it_does_not_know(repo):
         ("{not json", "line 3"),
         (json.dumps({"internetMessageId": "<x>"}), "no 'receivedDateTime'"),
         (json.dumps({"receivedDateTime": "2026-03-10T12:00:00Z"}), "no 'internetMess"),
+        (json.dumps({"receivedDateTime": None}), "receivedDateTime is not a string"),
+        (json.dumps(["a", "list"]), "not an object"),
     ],
 )
 def test_archive_fails_on_a_hits_line_that_does_not_parse(repo, line, why):
@@ -194,6 +207,31 @@ def test_hook_settings_entry_fails_when_missing_or_pointing_elsewhere(repo):
     notes = failed(dr.run())
     assert list(notes) == ["hook settings entry"]
     assert "does not parse" in notes["hook settings entry"]
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        [],
+        None,
+        {"hooks": []},
+        {"hooks": {"PostToolUse": {}}},
+        {"hooks": {"PostToolUse": [1]}},
+    ],
+)
+def test_hook_settings_entry_fails_on_settings_of_another_shape(repo, settings):
+    (repo / hk.SETTINGS_PATH).write_text(json.dumps(settings), encoding="utf-8")
+    notes = failed(dr.run())
+    assert list(notes) == ["hook settings entry"]
+    assert "does not parse" in notes["hook settings entry"]
+
+
+def test_hook_settings_entry_is_checked_when_the_settings_do_not_load(repo):
+    (repo / "pyproject.toml").write_text("[tool.outlooks\n", encoding="utf-8")
+    notes = failed(dr.run())
+    assert "settings" in notes and "hook settings entry" not in notes
+    (repo / hk.SETTINGS_PATH).write_text("{}", encoding="utf-8")
+    assert "no PostToolUse entry" in failed(dr.run())["hook settings entry"]
 
 
 def test_skill_stub_fails_when_missing_or_edited(repo):
