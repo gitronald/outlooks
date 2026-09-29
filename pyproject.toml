@@ -1,6 +1,6 @@
 [project]
 name = "outlooks"
-version = "0.3.0"
+version = "0.3.1a0"
 description = "Archive and read an Outlook mailbox through the Microsoft 365 connector, with the Claude Code skill that drives it."
 authors = [
     {name = "gitronald", email = "gitronald@users.noreply.github.com"}
