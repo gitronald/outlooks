@@ -23,6 +23,8 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
 ### Added
 
 - `classify.is_auto_reply(subject)` says whether a subject opens as an
