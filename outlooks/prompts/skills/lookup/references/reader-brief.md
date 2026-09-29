@@ -61,7 +61,7 @@ Your worklist file lists lines `NAME-NN <uri>`. For each line:
    - `summary`: the first 600 characters of the body as plain text, quoted
      reply chain excluded;
    - `system`: true when the sender is one of `system_senders` or
-     `notice_senders`.
+     `notice_senders`, and is not one of `own_addresses`.
 
 Rules: any Python you run is `uv run python`, never bare `python3`. Write
 nothing under the archive, and do not run `{cli} import` or `{cli} save`;

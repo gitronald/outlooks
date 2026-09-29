@@ -28,7 +28,8 @@ belongs.
 - The system senders and what each one sends (a web form, a
   ticketing system, a billing service). `{cli} senders` is how to find
   them: it counts the archived inbound mail by sender and marks each
-  address `own`, `system`, `notice`, or `unlisted`, and a frequent
+  address `own`, `system`, `notice`, or `unlisted` (`none` is the hits
+  with no sender, which no setting can list), and a frequent
   `unlisted` address that no person writes from is a notifier missing from
   the settings. One that speaks for us belongs in `system_senders`, and one
   that only writes to us (a bounce address) in `notice_senders`.
