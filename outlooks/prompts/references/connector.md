@@ -27,8 +27,9 @@ tooling reads nothing else. Run it first; the names below refer to its keys.
   letters carry, when it has one.
 - **Ledger:** `ledger.csv` in `archive_dir`, one row per message the sweep
   classified, keyed by `internet_message_id`. It is both the dedup list and
-  the high-water mark: the latest `received` in it is the next sweep's start,
-  and `{cli} coverage` reports when it lags the archive.
+  the high-water mark: `{cli} coverage` prints the next sweep's start from
+  the latest `received` in it (`next sweep from`), and reports when it lags
+  the archive.
 - **Archive:** `archive_dir`, holding `hits/{mailbox}/{YYYY-MM}.jsonl` (every
   search hit), `messages/{id-hash}.json` (+ `{id-hash}.{n}.txt` per
   attachment text), and `coverage.csv` (the window pulls that ran to

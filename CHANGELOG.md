@@ -31,6 +31,21 @@ what a consuming repo has to do about it:
   `system` role in the repo's own wrapper. Every other module says in its
   docstring that it is internal. A contract test pins the names and each
   function's parameter names.
+- `outlooks coverage --ledger <path>` reads a ledger kept somewhere other
+  than `ledger.csv` in `archive_dir`.
+
+### Changed
+
+- `outlooks coverage` ends with one more line, `next sweep from`, giving the
+  instant the next sweep passes as `afterDateTime`, in UTC: the earlier of
+  the ledger's high-water mark less five minutes and the end of recorded
+  coverage. The sweep reads it, where it used to compute it. A tool that
+  reads the footer should find each line by its label, not its position.
+- `outlooks import` names the fields that differ on a `DIFFERS` line (`DIFFERS
+  from the stored copy in body.content, attachments[].uri: <path>`) and no
+  longer says `(--replace rewrites)`. A tool that matches the line should
+  match on `DIFFERS from the stored copy` and take the path after the last
+  `: `. The README says when `--replace` is the fix.
 
 ## [0.1.0] - 2026-09-27
 

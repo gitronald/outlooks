@@ -85,14 +85,31 @@ outlooks doc profile-template` prints the headings it should answer.
 `{id-hash}` is the first 16 hex digits of the SHA-256 of the
 `internetMessageId` (`outlooks hash <id>`). Both tiers are write-once: a second
 import of an unchanged message is a no-op, and one that differs is listed, not
-rewritten (`import --replace` is the deliberate repair).
+rewritten:
+
+```
+  DIFFERS from the stored copy in body.content, attachments[].uri: temp/outlook/captured/20260105T101500-4242.json
+```
+
+The line names the fields that differ, so the two copies need no diffing by
+hand. Which copy is right decides what to do:
+
+- **The stored copy was not written from a capture** (it was saved by hand
+  with `outlooks save`, or typed out): the capture is the connector's own
+  output, and `outlooks import --replace` rewrites the stored copy from it.
+- **The capture is the older of the two** (the message changed after the
+  capture was written, and the stored copy came from a later read): the
+  stored copy is right. Leave it, and do not pass `--replace`.
+
+`outlooks import <paths> --replace` limits the rewrite to the captures named,
+so one repair never rewrites anything else that differs.
 
 ## Commands
 
 | Command | Does |
 |---|---|
 | `outlooks import [paths] [--replace]` | file the hook's captures; record complete windows |
-| `outlooks coverage [--since]` | covered windows, gaps, unread counts, ledger lag |
+| `outlooks coverage [--since] [--ledger]` | covered windows, gaps, unread counts, ledger lag, and the next sweep's start |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |
 | `outlooks worklist --after --before --out` | reader worklists for a full read of a range |

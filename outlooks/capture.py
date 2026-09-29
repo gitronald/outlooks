@@ -277,7 +277,8 @@ class Imported:
     messages_written: int = 0
     messages_unchanged: int = 0
     messages_replaced: list[Path] = field(default_factory=list)
-    messages_differ: list[Path] = field(default_factory=list)
+    # (capture, the fields that differ from the stored copy, as dotted paths)
+    messages_differ: list[tuple[Path, list[str]]] = field(default_factory=list)
     attachments_written: int = 0
     attachments_unmatched: list[Path] = field(default_factory=list)
     attachments_refused: list[tuple[Path, str]] = field(default_factory=list)
@@ -293,9 +294,10 @@ def import_captures(
 
     Search hits go to tier 1 and reads to tier 2, through the store's write-once
     saves, so re-importing the same captures is a no-op. A read that differs from
-    the stored message is listed in ``messages_differ``; with ``replace`` it, and
-    any stored hit that differs from a capture of the same copy, is rewritten
-    from the capture instead (the one-time repair of model-typed files).
+    the stored message is listed in ``messages_differ`` with the fields that
+    differ; with ``replace`` it, and any stored hit that differs from a capture
+    of the same copy, is rewritten from the capture instead (the one-time
+    repair of model-typed files).
     """
     mailbox = (mailbox or config.mailbox()).lower()
     done = Imported()
@@ -327,7 +329,7 @@ def import_captures(
                 store.replace_message(message, root)
                 done.messages_replaced.append(c.path)
             except store.StoreError:
-                done.messages_differ.append(c.path)
+                done.messages_differ.append((c.path, _differing(message, root)))
             continue
         if written:
             done.messages_written += 1
@@ -370,6 +372,41 @@ def import_captures(
         except store.StoreError as e:
             done.attachments_refused.append((c.path, str(e)))
     return done
+
+
+def _differing(message: dict[str, Any], root: Path | None) -> list[str]:
+    """The fields in which a capture's message differs from the stored copy."""
+    key = store.id_hash(message["internetMessageId"])
+    path = (store.archive_root() if root is None else root) / "messages" / f"{key}.json"
+    if not path.exists():
+        return []
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    return differing(stored, store.stable(message))
+
+
+def differing(stored: Any, new: Any, at: str = "") -> list[str]:
+    """Where two payloads differ, as dotted paths (``attachments[].uri``).
+
+    A list's items are compared in order and named without their position, so
+    a field that differs in several items is listed once. A list that differs
+    in length is named itself.
+    """
+    if isinstance(stored, dict) and isinstance(new, dict):
+        paths: list[str] = []
+        for key in sorted(stored.keys() | new.keys()):
+            here = f"{at}.{key}" if at else key
+            if key not in stored or key not in new:
+                paths.append(here)
+            elif stored[key] != new[key]:
+                paths += differing(stored[key], new[key], here)
+        return paths
+    if isinstance(stored, list) and isinstance(new, list):
+        paths = [f"{at}[]"] if len(stored) != len(new) else []
+        for old, item in zip(stored, new, strict=False):
+            if old != item:
+                paths += differing(old, item, f"{at}[]")
+        return list(dict.fromkeys(paths))
+    return [at]
 
 
 def _is_connector_note(c: Capture) -> bool:

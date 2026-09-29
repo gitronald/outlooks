@@ -26,7 +26,7 @@ from __future__ import annotations
 import csv
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, TypeAlias
 
@@ -43,6 +43,10 @@ WINDOW_KEYS = {
     "limit",
     "offset",
 }
+# How far before the ledger's high-water mark a sweep starts. A window with no
+# overlap drops a message that arrived in the same second as the last one
+# recorded. The sweep's text names the same margin in words.
+SWEEP_MARGIN = timedelta(minutes=5)
 
 
 class CoverageError(Exception):
@@ -329,6 +333,19 @@ def _pt(ts: datetime) -> str:
     return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
 
 
+def next_sweep(mark: datetime | None, end: datetime | None) -> datetime | None:
+    """The instant the next sweep passes as ``afterDateTime``.
+
+    The earlier of the ledger's high-water ``mark`` less :data:`SWEEP_MARGIN`
+    and the ``end`` of recorded coverage. With no ledger rows it is the end of
+    coverage, and with neither there is none.
+    """
+    if mark is None:
+        return end
+    start = mark - SWEEP_MARGIN
+    return start if end is None else min(start, end)
+
+
 def report(
     mailbox: str,
     rows: list[dict[str, str]],
@@ -340,6 +357,8 @@ def report(
     skipped: set[str] | None = None,
 ) -> list[str]:
     """The coverage report's lines (times in the configured zone).
+
+    The footer's last line, ``next sweep from``, is :func:`next_sweep` in UTC.
 
     ``ledger`` rows are the sweep's. A ledger with a ``mailbox`` column counts
     only this mailbox's rows; one without (a repo with one mailbox) counts all.
@@ -383,10 +402,16 @@ def report(
         for r in ledger
         if r.get("received") and r.get("mailbox", mailbox).lower() == mailbox
     ]
-    if marks:
-        lines.append(f"ledger high-water mark  {_pt(parse_ts(max(marks)))}")
-    if covered:
-        lines.append(f"coverage ends           {_pt(covered[-1][1])}")
-        if marks and parse_ts(max(marks)) < covered[-1][1]:
+    mark = parse_ts(max(marks)) if marks else None
+    end = covered[-1][1] if covered else None
+    if mark is not None:
+        lines.append(f"ledger high-water mark  {_pt(mark)}")
+    if end is not None:
+        lines.append(f"coverage ends           {_pt(end)}")
+        if mark is not None and mark < end:
             lines.append("  the ledger lags coverage: archived mail not yet classified")
+    start = next_sweep(mark, end)
+    if start is not None:
+        # The one line in UTC: it is passed to the connector as printed.
+        lines.append(f"next sweep from         {fmt_ts(start)}")
     return lines

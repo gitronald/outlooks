@@ -39,16 +39,24 @@ the lookup question.
 
 ## 1. Sweep
 
-Run the date-window sweep in **filter mode**: `afterDateTime` set to the
-ledger's latest `received` **minus five minutes**, with no `query` and no
-`sender`, and `limit: 25`. Page with `nextOffset` until `totalResultCount`
-is covered. An empty ledger has no high-water mark: ask the operator where
-to start.
+Run `{cli} coverage` and read its last line, `next sweep from`: the
+instant to pass as `afterDateTime`, already in UTC. Pass it as printed.
+Don't work it out from the lines above it, which are in the configured
+zone. When the profile's *Ledger columns* puts the ledger somewhere other
+than `ledger.csv` in `archive_dir`, run `{cli} coverage --ledger <path>`,
+or the line is computed without the ledger.
 
-Take the margin rather than starting exactly at the high-water mark. A
-window with zero overlap drops anything that arrived in the same second as
-the last recorded message but wasn't returned in that sweep's pages, and
-nothing would ever show it was missed. Re-listing a handful of
+Run the date-window sweep in **filter mode**: `afterDateTime` set to that
+instant, with no `query` and no `sender`, and `limit: 25`. Page with
+`nextOffset` until `totalResultCount` is covered. No `next sweep from` line
+means an empty ledger and no recorded coverage: ask the operator where to
+start.
+
+The instant is the ledger's latest `received` **minus five minutes**, or
+the end of recorded coverage when that is earlier. The margin is there
+because a window with zero overlap drops anything that arrived in the same
+second as the last recorded message but wasn't returned in that sweep's
+pages, and nothing would ever show it was missed. Re-listing a handful of
 already-known messages costs nothing, because the next step drops every
 `internetMessageId` already in the ledger.
 

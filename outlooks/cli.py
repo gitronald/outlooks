@@ -1,7 +1,7 @@
 """``outlooks`` — the Outlook mailbox archive and the skill that drives it.
 
     outlooks import [<capture-dir-or-file> ...] [--replace]
-    outlooks coverage [--since YYYY-MM-DD]
+    outlooks coverage [--since YYYY-MM-DD] [--ledger <ledger.csv>]
     outlooks save <message.json> [--text <attachment.txt>] | <hits.json> --hits
     outlooks render <message.json> --out <dir> [--text <att.txt>]
     outlooks split <name> --match <term> [--since] [--batches <dir>]
@@ -40,6 +40,9 @@ app = typer.Typer(
     help="Archive and read an Outlook mailbox through the Microsoft 365 connector.",
     no_args_is_help=True,
 )
+
+# How many differing fields a DIFFERS line names before it counts the rest.
+DIFFERS_SHOWN = 5
 
 
 def _fail(message: object) -> typer.Exit:
@@ -96,8 +99,12 @@ def import_(
     )
     for path in done.messages_replaced:
         typer.echo(f"  REPLACED message from {path}")
-    for path in done.messages_differ:
-        typer.echo(f"  DIFFERS from the stored copy (--replace rewrites): {path}")
+    for path, fields in done.messages_differ:
+        shown = ", ".join(fields[:DIFFERS_SHOWN])
+        if len(fields) > DIFFERS_SHOWN:
+            shown += f" (+{len(fields) - DIFFERS_SHOWN} more)"
+        where = f" in {shown}" if shown else ""
+        typer.echo(f"  DIFFERS from the stored copy{where}: {path}")
     typer.echo(f"attachment texts: {done.attachments_written} written")
     for path in done.attachments_unmatched:
         typer.echo(f"  UNMATCHED attachment read (its message not read): {path}")
@@ -146,6 +153,10 @@ def coverage(
         str | None,
         typer.Option(help="Report gaps from this date (default: the first row)."),
     ] = None,
+    ledger: Annotated[
+        Path | None,
+        typer.Option(help="The sweep's ledger (default: ledger.csv in archive_dir)."),
+    ] = None,
 ) -> None:
     """Report which windows the archive holds completely, and the gaps (read-only)."""
     from datetime import datetime
@@ -166,7 +177,7 @@ def coverage(
         cv.read_rows(),
         hits,
         set(store.load_messages()),
-        cv.read_rows(cv.ledger_csv()),
+        cv.read_rows(ledger or cv.ledger_csv()),
         since=start,
         skipped=cv.mass_copies(hits, cv.read_rows(cv.mass_sends_csv())),
     )
