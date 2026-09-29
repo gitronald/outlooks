@@ -55,6 +55,38 @@ def test_a_system_senders_mail_to_someone_else_is_counted():
     assert sd.senders(BOX) == [sd.Sender("notices@system.example.org", 1, "system")]
 
 
+def test_a_notice_sender_is_marked_notice_at_each_of_its_addresses():
+    archive(
+        hit(1, "postmaster@mail.example.net", ["priya.nakamura@example.com"]),
+        hit(2, "postmaster@mail.example.net", ["morgan.ellery@example.net"]),
+        hit(3, "Postmaster@other.example.com", ["priya.nakamura@example.com"]),
+    )
+    assert sd.senders(BOX) == [
+        sd.Sender("postmaster@mail.example.net", 2, "notice"),
+        sd.Sender("postmaster@other.example.com", 1, "notice"),
+    ]
+
+
+def test_a_hit_with_no_sender_is_counted_and_not_unlisted():
+    archive(
+        {**hit(1, ""), "recipients": [], "subject": ""},
+        {k: v for k, v in hit(2, "").items() if k != "sender"},
+        hit(3, "priya.nakamura@example.com"),
+    )
+    assert sd.senders(BOX) == [
+        sd.Sender("", 2, "none"),
+        sd.Sender("priya.nakamura@example.com", 1, "unlisted"),
+    ]
+    result = runner.invoke(app, ["senders"])
+    assert result.output.splitlines()[:4] == [
+        f"senders for {BOX}: 3 inbound hits",
+        "     2  none      (no sender)",
+        "     1  unlisted  priya.nakamura@example.com",
+        "1 unlisted; a notifier, not a person, belongs in system_senders when "
+        "it speaks for us, and in notice_senders when it only writes to us",
+    ]
+
+
 def test_since_is_a_date_in_the_configured_zone():
     archive(
         # 2026-03-09 23:30 Pacific, 2026-03-10 in UTC.
@@ -86,8 +118,8 @@ def test_cli_senders_prints_the_counts_and_writes_nothing(tmp_path):
         f"senders for {BOX} since 2026-01-01: 3 inbound hits",
         "     2  unlisted  alerts@tickets.example.net",
         "     1  system    notices@system.example.org",
-        "1 unlisted; an address that is a notifier, not a person, "
-        "belongs in system_senders",
+        "1 unlisted; a notifier, not a person, belongs in system_senders when "
+        "it speaks for us, and in notice_senders when it only writes to us",
     ]
     assert sorted(p for p in tmp_path.rglob("*") if p.is_file()) == before
 

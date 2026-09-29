@@ -81,9 +81,12 @@ under `.claude/`, the hook script, `settings.json`, and the skill stub.
 uv lock --upgrade-package outlooks
 uv sync
 uv run outlooks hook --apply   # rewrites a hook script an earlier release wrote
-uv run outlooks install        # rewrites the skill stub for the new version
+uv run outlooks install        # rewrites the skill stub, or only its stamp
 uv run outlooks doctor
 ```
+
+`install` rewrites the stub's content when the new release changed it.
+When it did not, only the stamp line changes, to name the new version.
 
 Read the changelog's *Changed* and *Removed* entries for every release
 between the two versions first: they say what a consuming repo has to do.
@@ -103,7 +106,8 @@ Everything repo-specific comes from `[tool.outlooks]` in the nearest
 [tool.outlooks]
 mailbox = "team@example.org"            # unset: the signed-in account's own mailbox
 own_addresses = ["team@example.org"]    # default: [mailbox]; required when mailbox is unset
-system_senders = ["notices@system.example.org"]
+system_senders = ["notices@system.example.org"]  # automated, speaks for us
+notice_senders = ["postmaster@*"]       # automated, writes to us: a bounce, say
 decision_tag = "[Decision]"
 archive_dir = "data/outlook"
 captured_dir = "temp/outlook/captured"
@@ -117,6 +121,14 @@ For the signed-in account's own mailbox, leave `mailbox` unset and list the
 account's addresses in `own_addresses`: the archive files under the first of
 them. Its searches report no totals, so a window counts as covered once its
 last page is captured, and the window planner does not apply.
+
+The two sender lists differ in direction. Mail from one of
+`system_senders` is ours (`out`) unless one of the own addresses is among
+its recipients. Mail from one of `notice_senders` is a notice to us (`in`)
+whoever it is addressed to: a bounce names the address that failed, not
+ours. An entry of either list is an address, or a pattern in which `*`
+stands for any run of characters, for a sender that writes from many
+addresses. An address that both lists match is a notice sender.
 
 `uv run outlooks config` prints the effective values and where each came from.
 The `profile` is repo-owned prose the skill reads for what this package cannot
@@ -181,7 +193,7 @@ so one repair never rewrites anything else that differs.
 |---|---|
 | `outlooks import [paths] [--replace]` | file the hook's captures; record complete windows |
 | `outlooks coverage [--since] [--ledger]` | covered windows, gaps, unread counts, ledger lag, and the next sweep's start |
-| `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, or `unlisted` |
+| `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, `notice`, or `unlisted` |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |
 | `outlooks lookup-reset <name>` | move a lookup's page and timeline files aside before a repeat lookup |
@@ -209,7 +221,7 @@ changelog under *Changed* or *Removed*.
 | `outlooks.store` | `archive_root`, `id_hash`, `stable`, `load_hits`, `load_messages`, `newest_hit`, `StoreError` |
 | `outlooks.classify` | `Mail`, `Facts`, `view`, `classify`, `is_reply`, `is_auto_reply`, `thread_subject` |
 | `outlooks.detail` | `detail`, `details_by_id`, `body_text` |
-| `outlooks.config` | `Settings`, `load`, `settings`, `KEYS`, `DEFAULTS`, `ConfigError`, `mailbox`, `archive_dir`, `captured_dir`, `scratch_dir`, `zone`, `zone_label` |
+| `outlooks.config` | `Settings`, `load`, `settings`, `KEYS`, `DEFAULTS`, `ConfigError`, `is_system_sender`, `is_notice_sender`, `mailbox`, `archive_dir`, `captured_dir`, `scratch_dir`, `zone`, `zone_label` |
 
 The API reads the archive and never writes it: a repo fills the archive
 through `outlooks import`.
@@ -256,7 +268,10 @@ def facts(payload):
 
 A `followup` carries `extra["auto"]`, true for an automatic reply.
 `is_auto_reply(subject)` is the same test for a repo that has only the
-subject in hand.
+subject in hand. A `system` message from one of `notice_senders` carries
+`extra["notice"]`, true. `config.is_system_sender(address)` and
+`config.is_notice_sender(address)` say which list an address is in,
+patterns included, which `address in settings().system_senders` does not.
 
 `Mail` carries what such a wrapper reads: `sender`, `recipients`, `subject`,
 and `text` (the body as plain text for a message read in full, the summary
@@ -278,6 +293,7 @@ def outlooks_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("OUTLOOKS_MAILBOX", "desk@example.org")
     monkeypatch.setenv("OUTLOOKS_OWN_ADDRESSES", "desk@example.org")
     monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", "notices@system.example.org")
+    monkeypatch.setenv("OUTLOOKS_NOTICE_SENDERS", "postmaster@*")
     monkeypatch.setenv("OUTLOOKS_DECISION_TAG", "[Decision]")
     monkeypatch.setenv("OUTLOOKS_TIMEZONE", "America/Los_Angeles")
     monkeypatch.setenv("OUTLOOKS_ARCHIVE_DIR", str(tmp_path / "archive"))

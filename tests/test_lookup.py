@@ -286,6 +286,45 @@ def test_is_system_and_direction():
     assert lk.direction("notices@system.example.org", ["desk@example.org"]) == "in"
 
 
+def test_a_notice_senders_mail_is_inbound_whoever_it_is_addressed_to(monkeypatch):
+    from outlooks import config
+
+    # A bounce: its recipient is the address that failed, not ours.
+    bounce = "postmaster@mail.example.net"
+    assert config.is_notice_sender(bounce)
+    assert not config.is_system_sender(bounce)
+    assert lk.is_system(bounce)
+    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert lk.direction("Postmaster@Other.Example.com", []) == "in"
+    # An address both lists match is a notice sender.
+    monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", "*@mail.example.net")
+    assert config.is_system_sender(bounce)
+    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert lk.direction("alerts@mail.example.net", ["priya@example.com"]) == "out"
+
+
+def test_split_pairs_nothing_with_a_matched_notice(tmp_path):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    bounce = hit(
+        "<bounce@mail.example.net>",
+        "postmaster@mail.example.net",
+        ["priya.nakamura@example.com"],
+        received="2026-01-05T10:00:00Z",
+    )
+    system_to_us = hit(
+        "<notice@system.example.org>",
+        "notices@system.example.org",
+        ["desk@example.org"],
+        received="2026-01-05T10:00:20Z",
+    )
+    write_page(scratch, "priya", 1, [bounce, system_to_us])
+    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path / "archive")
+    assert [h["internetMessageId"] for _, h in out.to_read] == [
+        bounce["internetMessageId"]
+    ]
+
+
 # --- timeline keys ------------------------------------------------------------
 
 

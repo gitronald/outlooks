@@ -157,6 +157,42 @@ def test_classify_system_mail_by_its_sender_alone():
     assert cl.classify(cl.view(hit)).role == "system"
 
 
+def test_classify_a_notice_senders_mail_as_system_flagged_notice(monkeypatch):
+    bounce = {
+        **load("hits-page.json")[1],
+        "sender": "Postmaster@Mail.Example.net",
+        "recipients": ["priya.nakamura@example.com"],
+        "subject": "Undeliverable: Winter Soil",
+    }
+    assert cl.classify(cl.view(bounce)) == cl.Facts("system", extra={"notice": True})
+    monkeypatch.delenv("OUTLOOKS_NOTICE_SENDERS")
+    assert cl.classify(cl.view(bounce)).role == "followup"
+
+
+@pytest.mark.parametrize(
+    "entry,address,found",
+    [
+        ("notices@system.example.org", "Notices@System.Example.org", True),
+        ("notices@system.example.org", "xnotices@system.example.org", False),
+        ("notices@system.example.org", "notices@system.example.org.net", False),
+        ("*@bounces.example.net", "a1b2@bounces.example.net", True),
+        ("*@bounces.example.net", "a1b2@example.net", False),
+        ("ticket-*@help.example.net", "ticket-4821@help.example.net", True),
+        ("ticket-*@help.example.net", "ticket-4821@help.example.com", False),
+        # Only ``*`` is special: a dot is a dot.
+        ("notices@system.example.org", "notices@systemXexample.org", False),
+        ("*", "", False),
+    ],
+)
+def test_a_sender_list_entry_is_an_address_or_a_pattern(
+    monkeypatch, entry, address, found
+):
+    from outlooks import config
+
+    monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", entry)
+    assert config.is_system_sender(address) is found
+
+
 def test_classify_decision_and_our_replies():
     decision = cl.view(load("decision-sent.json"))
     assert cl.classify(decision) == cl.Facts(

@@ -9,7 +9,8 @@ message plays.
 Roles: ``arrival`` (a correspondent's first message), ``followup`` (a reply or
 forward from outside), ``ours`` (mail from one of ``own_addresses``),
 ``decision`` (ours, with the configured ``decision_tag`` in the subject), and
-``system`` (mail from one of ``system_senders``). What a system sender's
+``system`` (mail from one of ``system_senders`` or ``notice_senders``; from
+the second, ``extra["notice"]`` is true). What a system sender's
 notifications say is the repo's own business: the package parses none of it.
 """
 
@@ -158,7 +159,9 @@ def classify(mail: Mail) -> Facts:
     """The role ``mail`` plays; a decision carries its label as ``outcome``."""
     subject = mail.subject
     settings = config.settings()
-    if mail.sender in settings.system_senders:
+    if config.is_notice_sender(mail.sender):
+        return Facts("system", extra={"notice": True})
+    if config.is_system_sender(mail.sender):
         return Facts("system")
     if mail.sender in settings.own_addresses:
         pattern = decision_tag()

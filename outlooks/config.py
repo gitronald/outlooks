@@ -11,8 +11,12 @@ list key takes a comma-separated value):
   which is archived under the first of ``own_addresses``.
 - ``own_addresses`` (``[mailbox]``): the addresses whose mail is ours
   (``direction: out``).
-- ``system_senders`` (none): automated senders, such as a web system's
-  notification address, whose mail is ours unless the mailbox is a recipient.
+- ``system_senders`` (none): automated senders that speak for us, such as a
+  web system's notification address, whose mail is ours unless the mailbox
+  is a recipient.
+- ``notice_senders`` (none): automated senders that write to us, such as a
+  mail system's bounce address, whose mail is a notice to us whoever it is
+  addressed to.
 - ``decision_tag`` (none): the subject tag our decision letters carry.
 - ``archive_dir`` (``data/outlook``): the committed archive.
 - ``captured_dir`` (``temp/outlook/captured``): where the capture hook writes.
@@ -20,6 +24,10 @@ list key takes a comma-separated value):
 - ``timezone`` (``America/Los_Angeles``): the zone dates are reported in.
 - ``profile`` (none): the repo's profile, the prose the skill reads for what
   this package cannot know (registries, sweep classes, filing, cross-checks).
+
+An entry of ``system_senders`` or ``notice_senders`` is an address, or a
+pattern in which ``*`` stands for any run of characters (``postmaster@*``),
+for a sender that writes from many addresses.
 
 Relative paths resolve against the directory of that ``pyproject.toml`` (the
 working directory when no file holds the table), so a command run from a
@@ -29,7 +37,9 @@ subdirectory finds the same archive and the same captures.
 from __future__ import annotations
 
 import os
+import re
 import tomllib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from functools import cache
@@ -44,6 +54,8 @@ __all__ = [
     "Settings",
     "archive_dir",
     "captured_dir",
+    "is_notice_sender",
+    "is_system_sender",
     "load",
     "mailbox",
     "scratch_dir",
@@ -63,6 +75,7 @@ KEYS = (
     "mailbox",
     "own_addresses",
     "system_senders",
+    "notice_senders",
     "decision_tag",
     "archive_dir",
     "captured_dir",
@@ -83,7 +96,8 @@ class Settings:
     source: Path | None  # the pyproject.toml holding the table, if any
     mailbox: str | None
     own_addresses: tuple[str, ...]
-    system_senders: tuple[str, ...]
+    system_senders: tuple[str, ...]  # addresses, or patterns with ``*``
+    notice_senders: tuple[str, ...]  # addresses, or patterns with ``*``
     decision_tag: str | None
     archive_dir: Path
     captured_dir: Path
@@ -155,6 +169,7 @@ def load(start: Path | None = None) -> Settings:
         mailbox=mailbox,
         own_addresses=own,
         system_senders=addresses("system_senders"),
+        notice_senders=addresses("notice_senders"),
         decision_tag=get("decision_tag"),
         archive_dir=required_path("archive_dir"),
         captured_dir=required_path("captured_dir"),
@@ -221,6 +236,27 @@ def mailbox() -> str:
     return box
 
 
+@cache
+def _entry(entry: str) -> re.Pattern[str]:
+    return re.compile(".*".join(re.escape(part) for part in entry.split("*")), re.I)
+
+
+def _listed(address: str, entries: Iterable[str]) -> bool:
+    """Whether ``address`` is one of ``entries``; ``*`` in an entry is any run."""
+    address = address.strip()
+    return bool(address) and any(_entry(e).fullmatch(address) for e in entries)
+
+
+def is_system_sender(address: str) -> bool:
+    """Whether ``address`` is one of ``system_senders``: it speaks for us."""
+    return _listed(address, settings().system_senders)
+
+
+def is_notice_sender(address: str) -> bool:
+    """Whether ``address`` is one of ``notice_senders``: it writes to us."""
+    return _listed(address, settings().notice_senders)
+
+
 def archive_dir() -> Path:
     """The committed archive: ``hits/``, ``messages/``, ``coverage.csv``."""
     return settings().archive_dir
@@ -263,6 +299,7 @@ def describe() -> list[tuple[str, str, str]]:
         "mailbox": s.mailbox or f"(unset: the signed-in account, {account})",
         "own_addresses": ", ".join(s.own_addresses) or "(none)",
         "system_senders": ", ".join(s.system_senders) or "(none)",
+        "notice_senders": ", ".join(s.notice_senders) or "(none)",
         "decision_tag": s.decision_tag or "(unset)",
         "archive_dir": s.archive_dir,
         "captured_dir": s.captured_dir,

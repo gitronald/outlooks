@@ -197,7 +197,7 @@ def senders(
         typer.Option(help="Count hits received on or after YYYY-MM-DD."),
     ] = None,
 ) -> None:
-    """Count the inbound hits by sender; mark each own, system, or unlisted."""
+    """Count the inbound hits by sender; mark each as the settings list it."""
     from datetime import date
 
     from outlooks import senders as sd
@@ -217,8 +217,9 @@ def senders(
         typer.echo(f"{s.count:6}  {s.mark:8}  {s.address or '(no sender)'}")
     unlisted = sum(1 for s in found if s.mark == "unlisted")
     typer.echo(
-        f"{unlisted} unlisted; an address that is a notifier, not a person, "
-        "belongs in system_senders"
+        f"{unlisted} unlisted; a notifier, not a person, belongs in "
+        "system_senders when it speaks for us, and in notice_senders when it "
+        "only writes to us"
     )
 
 
@@ -357,7 +358,8 @@ def check(
     from outlooks import config, lookup
 
     rows = lookup.check(name)
-    show_system = bool(config.settings().system_senders)
+    settings = config.settings()
+    show_system = bool(settings.system_senders or settings.notice_senders)
     for r in rows:
         system = f" system={r.system}" if show_system else ""
         typer.echo(
