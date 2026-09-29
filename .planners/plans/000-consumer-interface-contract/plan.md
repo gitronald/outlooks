@@ -220,10 +220,12 @@ points at it as the way to find system senders in the first place.
    ignore file.
 3. **Publish to PyPI.** A git source cannot be resolved on a network that
    allows only the package index, and cannot be pinned by version range.
-   The publish workflow is already in the repo, disabled. Enabling it needs
-   the maintainer: confirm the name is free, register the trusted
-   publisher, and set `PUBLISH_ENABLED`. The README's recipes then name the
-   index first and the git source second.
+   The publish workflow is already in the repo, disabled. The index side is
+   ready (see the Log): the name is reserved and a trusted publisher is
+   registered for this repository. What is left is on this side: set
+   `PUBLISH_ENABLED`, and confirm the workflow file name and the `pypi`
+   environment match what the publisher was registered with. The README's
+   recipes then name the index first and the git source second.
 
 ### Out of scope
 
@@ -277,4 +279,28 @@ line.
 8. J and K.1: the README.
 9. Gate: `ruff check`, `ruff format --check`, `pyrefly check`, `pytest`,
    and a scan of the tree for anything that is not an invented example.
-10. K.3: publishing, once the maintainer has set up the index side.
+10. K.3: set `PUBLISH_ENABLED` before the release that carries this plan,
+    so its tag is the first upload. The index side is ready.
+
+## Log
+
+### 2026-09-29: the index side of publishing is ready
+
+Logged 2026-09-29T01:58:07-07:00. The maintainer reserved the name `outlooks`
+on PyPI and registered this repository as its trusted publisher, which was
+the part of K.3 that could not be done from the repo.
+
+Checked from the repo, read-only:
+
+| Check | Result |
+|---|---|
+| Repository variables | none set, so `PUBLISH_ENABLED` is still off and a tag push publishes nothing |
+| Repository environments | none; the workflow's `pypi` environment is created on its first run |
+| The project's page on the index | not found, as expected before a first upload |
+
+Not verified: that the publisher was registered with the workflow file name
+`publish.yml` and the environment name `pypi`. A mismatch in either fails
+the first upload at the token exchange, not before.
+
+Nothing was enabled. K.3 and step 10 of the implementation order now say
+what is left.
