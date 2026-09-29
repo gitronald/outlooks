@@ -18,6 +18,9 @@
 Each command imports its working module inside the body, so ``--help`` and any
 single command stay cheap. Every setting comes from ``[tool.outlooks]``
 (``outlooks config``).
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations

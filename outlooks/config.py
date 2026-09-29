@@ -36,6 +36,22 @@ from functools import cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+# The names a consuming repo may import; a change to one is a changelog entry.
+__all__ = [
+    "DEFAULTS",
+    "KEYS",
+    "ConfigError",
+    "Settings",
+    "archive_dir",
+    "captured_dir",
+    "load",
+    "mailbox",
+    "scratch_dir",
+    "settings",
+    "zone",
+    "zone_label",
+]
+
 DEFAULTS = {
     "archive_dir": "data/outlook",
     "captured_dir": "temp/outlook/captured",

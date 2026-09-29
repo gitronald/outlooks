@@ -16,6 +16,9 @@ rows and lists the gaps between them.
 Sent Items and in another folder), while the archive keys on
 ``internetMessageId``, so a row carries both ``total`` and ``messages``, the
 distinct count.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A declared Python API: `store`, `classify`, `detail`, and `config` each
+  name what a consuming repo may import in `__all__`, listed in the README's
+  "Python API" section with a reading example and an example of refining a
+  `system` role in the repo's own wrapper. Every other module says in its
+  docstring that it is internal. A contract test pins the names and each
+  function's parameter names.
+
 ## [0.1.0] - 2026-09-27
 
 ### Added

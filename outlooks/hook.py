@@ -9,6 +9,9 @@ has the script and the ``.claude/settings.json`` entry that runs it, and
 The script is written for the repo's ``captured_dir`` (:func:`script`), so the
 hook writes where ``outlooks import`` reads; one written for another directory,
 or by an earlier build, is ``stale``.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations

@@ -106,6 +106,67 @@ rewritten (`import --replace` is the deliberate repair).
 | `outlooks config` | the effective settings |
 | `outlooks skill`, `outlooks doc`, `outlooks install`, `outlooks permissions` | the skill, its documents, the stub, and its permission profile ([pkgskills](https://github.com/gitronald/pkgskills)) |
 
+## Python API
+
+A repo that imports this package may import the names below, and nothing
+else. Every other module is internal, and the commands are its interface. A
+change to one of these names, or to a parameter of one, is listed in the
+changelog under *Changed* or *Removed*.
+
+| Module | Public names |
+|---|---|
+| `outlooks.store` | `archive_root`, `id_hash`, `stable`, `load_hits`, `load_messages`, `newest_hit`, `StoreError` |
+| `outlooks.classify` | `Mail`, `Facts`, `view`, `classify`, `is_reply`, `thread_subject` |
+| `outlooks.detail` | `detail`, `details_by_id`, `body_text` |
+| `outlooks.config` | `Settings`, `load`, `settings`, `KEYS`, `DEFAULTS`, `ConfigError`, `mailbox`, `archive_dir`, `captured_dir`, `scratch_dir`, `zone`, `zone_label` |
+
+The API reads the archive and never writes it: a repo fills the archive
+through `outlooks import`.
+
+Reading the archive:
+
+```python
+from outlooks import classify, detail, store
+
+hits = store.load_hits()  # every message ever listed, by internetMessageId
+messages = store.load_messages()  # the ones read in full
+
+for mid, hit in hits.items():
+    mail = classify.view(messages.get(mid, hit))
+    role = classify.classify(mail).role
+    print(mail.day, role, mail.sender, mail.subject)
+
+for mid, message in messages.items():
+    fields = detail.detail(message)  # from, to, cc, bcc, attachments, body
+```
+
+`classify` reports the role a message plays (`arrival`, `followup`, `ours`,
+`decision`, `system`) and stops there. What a system sender's notification
+says is the repo's own business, and the place for it is a thin wrapper in
+the repo. For a ticketing system whose notices read "Ticket #12 was opened
+by ...":
+
+```python
+import re
+
+from outlooks import classify as cl
+
+OPENED = re.compile(r"Ticket #(\d+) was opened by (.+?)\.")
+
+
+def facts(payload):
+    mail = cl.view(payload)
+    base = cl.classify(mail)
+    if base.role != "system":
+        return base.role, None
+    found = OPENED.search(mail.text)
+    return ("system-opened", int(found[1])) if found else ("system-other", None)
+```
+
+`Mail` carries what such a wrapper reads: `sender`, `recipients`, `subject`,
+and `text` (the body as plain text for a message read in full, the summary
+for a search hit).
+
 ## Development
 
 ```bash

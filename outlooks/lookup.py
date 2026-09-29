@@ -7,6 +7,9 @@ them oldest-first, and writes ``{scratch}/{name}-{nn}.timeline.json`` for every
 hit already in the archive; the rest are the readers' worklist. :func:`check`
 then compares every timeline file (written here or by a reader) with the
 archive. Neither writes anything under the archive.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations

@@ -13,6 +13,9 @@ the file it was saved to; the hook copies that file beside the capture as
 A search capture is one page: hit objects, then a trailer carrying
 ``moreResults``, ``nextOffset``, and ``totalResultCount``. A read capture is one
 message, or the extracted text of one attachment when the uri names one.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations
