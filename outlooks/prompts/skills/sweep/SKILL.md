@@ -102,8 +102,9 @@ The classes, their rules, and each class's default outcome (`candidate` or
 `skipped`) are the profile's *Sweep classes* section. Whatever the repo's
 classes are, the shape is the same, and these rules hold under any profile:
 
-- mail from a **system sender** and mail from one of the **own addresses**
-  (our own sent mail) get their own classes, skipped by default;
+- mail from a **system sender**, mail from a **notice sender**, and mail
+  from one of the **own addresses** (our own sent mail) get their own
+  classes, skipped by default;
 - every other **inbound first message** is sorted by the profile's rules
   into the classes that become candidates and the ones that don't.
 

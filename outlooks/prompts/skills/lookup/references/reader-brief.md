@@ -3,7 +3,7 @@
 Work from the repo root your launch prompt names; run every command there.
 
 Run `{cli} config` first. It prints `own_addresses`, `system_senders`,
-`timezone`, `scratch_dir` (where your timeline files go; called `<scratch>`
+`notice_senders`, `timezone`, `scratch_dir` (where your timeline files go; called `<scratch>`
 below), and `archive_dir`.
 
 Load the tool schema: ToolSearch query "select:mcp__claude_ai_Microsoft_365__read_resource".
@@ -52,14 +52,16 @@ Your worklist file lists lines `NAME-NN <uri>`. For each line:
    - `date_local`: that instant converted to the configured `timezone`,
      YYYY-MM-DD;
    - `direction`: "out" when the sender is one of `own_addresses`, or when
-     the sender is one of `system_senders` and none of `own_addresses` is
-     among the recipients; "in" otherwise;
+     the sender is one of `system_senders`, is not one of `notice_senders`,
+     and none of `own_addresses` is among the recipients; "in" otherwise
+     (in either list, `*` in an entry stands for any run of characters);
    - `sender` (address), `to` (list of recipient addresses), `subject`,
      `internet_message_id`, `weblink` (the message's webLink), `attachments`
      (list of names);
    - `summary`: the first 600 characters of the body as plain text, quoted
      reply chain excluded;
-   - `system`: true when the sender is one of `system_senders`.
+   - `system`: true when the sender is one of `system_senders` or
+     `notice_senders`.
 
 Rules: any Python you run is `uv run python`, never bare `python3`. Write
 nothing under the archive, and do not run `{cli} import` or `{cli} save`;

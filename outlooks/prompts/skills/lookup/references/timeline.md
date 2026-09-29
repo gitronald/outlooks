@@ -26,7 +26,7 @@ changelog under *Changed*.
 | `weblink` | the message's `webLink` | no | no |
 | `attachments` | the attachments' names, a list | no | no |
 | `summary` | the start of the body as plain text | no | no |
-| `system` | `true` when the sender is one of `system_senders` | yes | no |
+| `system` | `true` when the sender is one of `system_senders` or `notice_senders` | yes | no |
 | `source` | `archive`, in a file the split wrote; a reader writes none | no | no |
 
 `check` finds the archived message from `internet_message_id` and compares
