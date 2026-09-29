@@ -29,9 +29,38 @@ what a consuming repo has to do about it:
   automatic reply's does. It is the test behind a `followup`'s
   `extra["auto"]`, for a repo that has only the subject in hand. A repo
   that keeps a copy of the package's internal pattern can drop the copy.
+- A `notice_senders` setting (`OUTLOOKS_NOTICE_SENDERS`), empty by default:
+  automated senders that write to us, such as a mail system's bounce
+  address. Mail from one is `direction: in` whoever it is addressed to,
+  where mail from one of `system_senders` is `out` unless it is addressed
+  to us. `classify` gives it the `system` role with `extra["notice"]` true,
+  `outlooks senders` marks its addresses `notice`, and a lookup pairs
+  nothing with it. An address both lists match is a notice sender.
+- An entry of `system_senders` or `notice_senders` may be a pattern in
+  which `*` stands for any run of characters (`postmaster@*`,
+  `*@bounces.example.net`), for a sender that writes from many addresses.
+  An entry without `*` matches as before.
+- `config.is_system_sender(address)` and `config.is_notice_sender(address)`
+  say whether an address is one of each list, patterns included.
 
 ### Changed
 
+- `config.Settings` has one more field, `notice_senders`, after
+  `system_senders`, and `config.KEYS` one more key in the same place. A
+  repo that builds a `Settings` itself passes the new field. A repo whose
+  test fixture pins every setting pins `OUTLOOKS_NOTICE_SENDERS` too (the
+  README's fixture does).
+- A repo that tests `address in settings().system_senders` keeps working
+  while every entry is an address. Once an entry is a pattern it calls
+  `config.is_system_sender(address)`.
+- A lookup's timeline key `system` is true for a sender in either list. It
+  was true for one of `system_senders` only, and is unchanged for a repo
+  that sets no `notice_senders`.
+- `outlooks senders` marks the hits that have no sender `none` and leaves
+  them out of the unlisted count. They were counted as one unlisted
+  address, which no setting could list. Its closing line now names both
+  lists: `system_senders` for a notifier that speaks for us, and
+  `notice_senders` for one that only writes to us.
 - The reply test and the automatic-reply test read one list of phrases, so
   a subject that reads as automatic always reads as a reply. `Auto-reply`,
   `Auto reply`, `Autoreply`, `Auto-response`, and `Out of the office` are
