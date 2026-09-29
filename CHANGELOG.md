@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+A repo that builds on this package depends on more than its commands. A
+change to any of the following is listed under *Changed* or *Removed*, with
+what a consuming repo has to do about it:
+
+- a public Python name or one of its parameters (the README's "Python API");
+- a settings key or its default. A default counts because a repo that leaves
+  a key unset still has the default's path in its hook script and its ignore
+  file;
+- the archive's file format;
+- a command's name or exit code;
+- a line another tool is told to read: the `coverage` footer (`ledger
+  high-water mark`, `coverage ends`, `next sweep from`), and `COVERED`,
+  `INCOMPLETE`, and `DIFFERS` from `import`;
+- a skill step's name;
+- a key of a lookup's timeline file.
+
 ## [Unreleased]
 
 ### Added
