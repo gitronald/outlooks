@@ -304,3 +304,55 @@ the first upload at the token exchange, not before.
 
 Nothing was enabled. K.3 and step 10 of the implementation order now say
 what is left.
+
+### 2026-09-29: steps 1 to 9 implemented
+
+Logged 2026-09-29T02:19:06-07:00. Steps 1 to 9 of the implementation order
+are on the branch, one commit or a small group each, with tests and
+changelog entries. Step 10 (K.3) is not done: see the end of this entry.
+
+| Step | Item | What landed |
+|---|---|---|
+| 1 | A, B | `__all__` on `store`, `classify`, `detail`, and `config`; the internal note in every other module's docstring; `tests/test_contract.py`; the README's "Python API" section, whose two examples the contract test runs |
+| 2 | K.2 | the list of consumer-facing changes, in the changelog's preamble |
+| 3 | E, F | the `next sweep from` line and `SWEEP_MARGIN`; the fields on a `DIFFERS` line; the sweep's step 1 reads the line |
+| 4 | G, H | `outlooks doc lookup/timeline`; `check` prints why a row is `BAD`; `outlooks lookup-reset` |
+| 5 | D | a fixed name on every step of the three modes; `tests/test_steps.py` |
+| 6 | I | `outlooks senders` |
+| 7 | C | `outlooks doctor` |
+| 8 | J, K.1 | the README's install, upgrade, CI, trial, testing, and releases sections |
+| 9 | gate | `ruff check`, `ruff format --check`, `pyrefly check`, and `pytest` (325 passed) are clean, and CI passes on Python 3.11 to 3.14 |
+
+Decisions made while implementing:
+
+- **The public list for `config`** names `mailbox` beside the path and zone
+  helpers. Reading an archive for the signed-in account's own mailbox needs
+  the address it is filed under, and `settings().mailbox` is unset there.
+  `declared_path`, `describe`, and the new `unknown_keys` stay out.
+- **The contract test pins more than parameter names**: the fields of the
+  public dataclasses (`Mail`, `Facts`, `Settings`), the settings keys and
+  defaults, and the command names, since K.2 lists each as part of the
+  interface.
+- **`coverage` takes `--ledger <path>`**, which the plan did not list. The
+  profile may keep the ledger somewhere other than `ledger.csv` in
+  `archive_dir`, and `coverage` would then print the end of coverage as the
+  next sweep's start, past mail the ledger never classified. The sweep's
+  step 1 says when to pass it.
+- **`lookup-reset` keeps that name.** It moves exactly the page files the
+  split would merge, through one shared function, and takes the next free
+  folder when two resets land in the same second.
+- **Step names.** A numbered heading ends in the name, and a numbered list
+  item opens with it. Window mode's three procedures share numbers, so its
+  names carry the procedure (`pull-import`, `collect-import`,
+  `read-import`) and each is unique in the mode.
+- **`doctor` fails on a key that is not a setting**, as part of the
+  settings check: a misspelled key is otherwise ignored and its default
+  used. A check that needs the settings reports `not checked` and fails
+  when they do not load.
+- **The tree scan** (addresses, URLs, local paths) was run from a scratch
+  script outside the repo. Nothing this plan added was flagged.
+
+Not done: step 10. `PUBLISH_ENABLED` is still unset. Setting it makes the
+next tag push upload to the index, which cannot be undone, and whether the
+publisher was registered with the workflow file name `publish.yml` and the
+environment name `pypi` cannot be read from the repo.
