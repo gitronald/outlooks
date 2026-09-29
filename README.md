@@ -123,6 +123,7 @@ so one repair never rewrites anything else that differs.
 | `outlooks hash <id>` | a message's archive file stem |
 | `outlooks hook [--apply]` | check or wire the capture hook |
 | `outlooks config` | the effective settings |
+| `outlooks doctor` | settings, profile, archive, hook, and skill stub in one read-only pass; exit 1 if any check fails |
 | `outlooks skill`, `outlooks doc`, `outlooks install`, `outlooks permissions` | the skill, its documents, the stub, and its permission profile ([pkgskills](https://github.com/gitronald/pkgskills)) |
 
 ## Python API

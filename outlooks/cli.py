@@ -15,6 +15,7 @@
     outlooks hash <internetMessageId>
     outlooks hook [--apply]
     outlooks config
+    outlooks doctor
     outlooks skill | doc | install    (from pkgskills)
 
 Each command imports its working module inside the body, so ``--help`` and any
@@ -538,6 +539,19 @@ def config_() -> None:
     typer.echo(f"table: {s.source or '(none: defaults)'}")
     for key, value, origin in config.describe():
         typer.echo(f"{key:15} {value}  [{origin}]")
+
+
+@app.command()
+def doctor() -> None:
+    """Check that this repo is wired correctly (read-only); exit 1 on any failure."""
+    from outlooks import doctor as dr
+
+    results = dr.run()
+    for r in results:
+        typer.echo(f"{r.check:20} {'ok' if r.ok else 'FAIL':5} {r.note}")
+    failed = sum(1 for r in results if not r.ok)
+    typer.echo(f"{len(results)} checks, {failed} failed")
+    raise typer.Exit(1 if failed else 0)
 
 
 windows_app = typer.Typer(

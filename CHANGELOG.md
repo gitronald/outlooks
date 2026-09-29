@@ -39,6 +39,13 @@ what a consuming repo has to do about it:
   nothing, and the lookup skill runs it before launching searchers.
 - `outlooks doc lookup/timeline` lists every key of a lookup's timeline
   file, which of them `check` reads, and which are required.
+- `outlooks doctor` checks in one read-only pass that a repo is wired
+  correctly, one line per check, and exits 1 if any fails: the settings
+  (the table is there, every key is a setting, and each parses), the
+  profile (the file exists when `profile` is set), the archive
+  (`coverage.csv` and every hits file parse), the hook script, the hook's
+  settings entry, and the skill stub. It makes no connector call, so a
+  consuming repo's CI can run it.
 - `outlooks senders [--since YYYY-MM-DD]` counts the archived inbound hits
   by sender address, most frequent first, and marks each `own`, `system`, or
   `unlisted`, so a notifier missing from `system_senders` is visible.

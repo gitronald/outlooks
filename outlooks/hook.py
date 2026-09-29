@@ -175,14 +175,18 @@ def _read_settings(root: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def status(root: Path, start: Path | None = None) -> Status:
-    """Whether ``root`` has the capture script and the settings entry."""
+def script_state(root: Path, start: Path | None = None) -> str:
+    """The state of ``root``'s capture script, as :class:`Status` names it."""
     path = root / SCRIPT_PATH
     if not path.is_file():
-        state = "missing"
-    else:
-        state = _script_state(path.read_text(encoding="utf-8"), root, start)
-    return Status(state, "ok" if _wired(_read_settings(root)) else "missing")
+        return "missing"
+    return _script_state(path.read_text(encoding="utf-8"), root, start)
+
+
+def status(root: Path, start: Path | None = None) -> Status:
+    """Whether ``root`` has the capture script and the settings entry."""
+    wired = _wired(_read_settings(root))
+    return Status(script_state(root, start), "ok" if wired else "missing")
 
 
 def apply(root: Path, *, force: bool = False, start: Path | None = None) -> list[str]:

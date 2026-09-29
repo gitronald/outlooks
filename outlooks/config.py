@@ -166,6 +166,15 @@ def load(start: Path | None = None) -> Settings:
     )
 
 
+def unknown_keys(start: Path | None = None) -> list[str]:
+    """The keys of the ``[tool.outlooks]`` table that are not settings.
+
+    A misspelled key is otherwise ignored, and its default used, in silence.
+    """
+    _, _, table = _table((start or Path.cwd()).resolve())
+    return sorted(key for key in table if key not in KEYS)
+
+
 def declared_path(key: str, start: Path | None = None) -> Path:
     """A path key as ``pyproject.toml`` (or its default) gives it, environment aside.
 
