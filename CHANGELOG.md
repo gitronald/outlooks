@@ -5,7 +5,95 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+A repo that builds on this package depends on more than its commands. A
+change to any of the following is listed under *Changed* or *Removed*, with
+what a consuming repo has to do about it:
+
+- a public Python name or one of its parameters (the README's "Python API");
+- a settings key or its default. A default counts because a repo that leaves
+  a key unset still has the default's path in its hook script and its ignore
+  file;
+- the archive's file format;
+- a command's name or exit code;
+- a line another tool is told to read: the `coverage` footer (`ledger
+  high-water mark`, `coverage ends`, `next sweep from`), and `COVERED`,
+  `INCOMPLETE`, and `DIFFERS` from `import`;
+- a skill step's name;
+- a key of a lookup's timeline file.
+
 ## [Unreleased]
+
+## [0.2.0] - 2026-09-29
+
+### Added
+
+- A declared Python API: `store`, `classify`, `detail`, and `config` each
+  name what a consuming repo may import in `__all__`, listed in the README's
+  "Python API" section with a reading example and an example of refining a
+  `system` role in the repo's own wrapper. Every other module says in its
+  docstring that it is internal. A contract test pins the names, and each
+  function's parameter names, which of them have a default, and how each
+  may be passed.
+- `outlooks coverage --ledger <path>` reads a ledger kept somewhere other
+  than `ledger.csv` in `archive_dir`. A path that is not a file is an error
+  (exit 1), never an empty ledger.
+- `outlooks lookup-reset <name>` moves a lookup's page and timeline files
+  to `earlier/{timestamp}/` under `scratch_dir` and prints what it moved, so
+  a repeat lookup of a name never merges the last one's pages. It deletes
+  nothing, and the lookup skill runs it before launching searchers.
+- `outlooks doc lookup/timeline` lists every key of a lookup's timeline
+  file, which of them `check` reads, and which are required.
+- `outlooks doctor` checks in one read-only pass that a repo is wired
+  correctly, one line per check, and exits 1 if any fails: the settings
+  (the table is there, every key is a setting, and each parses), the
+  profile (the file exists when `profile` is set), the archive
+  (`coverage.csv` and every hits file parse), the hook script, the hook's
+  settings entry, and the skill stub. It makes no connector call, so a
+  consuming repo's CI can run it.
+- `outlooks senders [--since YYYY-MM-DD]` counts the archived inbound hits
+  by sender address, most frequent first, and marks each `own`, `system`, or
+  `unlisted`, so a notifier missing from `system_senders` is visible.
+  Read-only. The profile template's *Who we are* points at it.
+- Every step of the three modes has a fixed name, given where the step
+  starts (the sweep's are `setup`, `sweep`, `classify`, `match`, `worklist`,
+  `file`, `ledger`, and `report`). A repo's own skill or profile cites a step
+  by name, which a renumbering does not change; `outlooks doc
+  profile-template` says so. A test pins the names and their order per mode.
+- The README gives one install recipe for a repo that only runs the
+  commands and one for a repo that imports the package, an upgrade recipe
+  that ends in `outlooks doctor`, a CI example, how to run any command
+  against a copy of the archive, and the fixture a consuming repo's tests
+  pin the settings with.
+
+### Changed
+
+- `outlooks coverage` ends with one more line, `next sweep from`, giving the
+  instant the next sweep passes as `afterDateTime`, in UTC: the earlier of
+  the ledger's high-water mark less five minutes and the end of recorded
+  coverage. The sweep reads it, where it used to compute it. With an empty
+  ledger the line is the end of recorded coverage, and the sweep still asks
+  the operator where to start, because the archived mail before that instant
+  has never been classified. A tool that reads the footer should find each
+  line by its label, not its position.
+- `outlooks import` names the fields that differ on a `DIFFERS` line (`DIFFERS
+  from the stored copy in body.content, attachments[].uri: <path>`) and no
+  longer says `(--replace rewrites)`. A tool that matches the line should
+  match on `DIFFERS from the stored copy` and take the path after the last
+  `: `. The line names no field, `DIFFERS from the stored copy: <path>`,
+  when the stored copy is not JSON. The README says when `--replace` is the
+  fix.
+- `outlooks check` prints why a row is `BAD` on a line of its own under the
+  row: `missing key date_local` (or `internet_message_id`), `not archived`,
+  or the two dates that disagree. A timeline file with no
+  `internet_message_id` used to stop the command with a traceback, and one
+  with no `date_local` read as a date mismatch. The exit code is unchanged.
+
+### Fixed
+
+- `outlooks split <name>` no longer merges the page files of another lookup
+  whose name starts with `<name>-` (`smith` and `smith-jones`). A page file
+  is the name, one of the searchers' kinds (`sender`, `title`, `sent`) or
+  none, and `page-{n}.json`.
 
 ## [0.1.0] - 2026-09-27
 

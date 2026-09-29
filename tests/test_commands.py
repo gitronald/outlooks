@@ -136,6 +136,36 @@ def test_cli_split_and_check_round_trip(tmp_path):
     assert "01" in check_result.output and "ok" in check_result.output
 
 
+def test_cli_check_names_a_missing_key_under_the_row():
+    scratch = config.scratch_dir()
+    scratch.mkdir(parents=True, exist_ok=True)
+    record = {"internet_message_id": "<cli-1@example.com>", "subject": "Inquiry"}
+    (scratch / "cli-01.timeline.json").write_text(json.dumps(record), "utf-8")
+    result = runner.invoke(app, ["check", "cli"])
+    assert result.exit_code == 1
+    row, finding = result.output.splitlines()
+    assert row.startswith("01 - - BAD")
+    assert finding == "   missing key date_local"
+
+
+def test_cli_lookup_reset_prints_what_it_moved_and_deletes_nothing():
+    scratch = config.scratch_dir()
+    scratch.mkdir(parents=True, exist_ok=True)
+    (scratch / "cli-page-01.json").write_text("[]", encoding="utf-8")
+    (scratch / "cli-01.timeline.json").write_text("{}", encoding="utf-8")
+    result = runner.invoke(app, ["lookup-reset", "cli"])
+    assert result.exit_code == 0, result.output
+    [folder] = (scratch / "earlier").iterdir()
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "cli-01.timeline.json",
+        "cli-page-01.json",
+    ]
+    assert f"2 files of cli moved to {folder}" in result.output
+    again = runner.invoke(app, ["lookup-reset", "cli"])
+    assert again.exit_code == 0
+    assert f"no files of cli in {scratch}" in again.output
+
+
 def test_cli_check_exits_nonzero_with_no_timeline_files():
     result = runner.invoke(app, ["check", "never-run"])
     assert result.exit_code == 1

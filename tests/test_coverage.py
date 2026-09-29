@@ -221,12 +221,97 @@ def test_import_lists_a_differing_read_and_replace_rewrites_it(tmp_path):
     path = write_capture(tmp_path / "c", "20260913T1", READ, {"uri": uri}, message(1))
     captures, _ = cp.load_captures([path])
 
-    assert cp.import_captures(captures, root=root).messages_differ == [path]
+    assert cp.import_captures(captures, root=root).messages_differ == [
+        (path, ["body.content"])
+    ]
     assert cp.import_captures(captures, root=root, replace=True).messages_replaced == [
         path
     ]
     stored = store.load_messages(root)["<m1@example.com>"]
     assert stored["body"]["content"] == "<p>body 1</p>"
+
+
+def test_differing_names_fields_as_dotted_paths():
+    stored = {
+        "subject": "one",
+        "body": {"contentType": "html", "content": "typed"},
+        "attachments": [{"name": "a.pdf", "uri": "u1"}, {"name": "b.pdf", "uri": "u2"}],
+        "sender": {"address": "someone@example.com"},
+        "webLink": "w",
+    }
+    new = {
+        "subject": "one",
+        "body": {"contentType": "html", "content": "<p>sent</p>"},
+        "attachments": [{"name": "a.pdf", "uri": "v1"}, {"name": "b.pdf", "uri": "v2"}],
+        "sender": {"address": "someone@example.com"},
+        "conversationId": "c",
+    }
+    # A field that differs in two items is named once; a field only one copy
+    # has is named too.
+    assert cp.differing(stored, new) == [
+        "attachments[].uri",
+        "body.content",
+        "conversationId",
+        "webLink",
+    ]
+    assert cp.differing(stored, stored) == []
+
+
+def test_differing_names_a_list_whose_length_changed():
+    stored = {"attachments": [{"name": "a.pdf"}], "categories": ["x"]}
+    new = {"attachments": [{"name": "a.pdf"}, {"name": "b.pdf"}], "categories": ["y"]}
+    assert cp.differing(stored, new) == ["attachments[]", "categories[]"]
+
+
+def test_import_names_the_differing_fields_and_caps_the_list(tmp_path):
+    root = config.archive_dir()
+    typed = {
+        **message(1),
+        "subject": "retyped",
+        "body": {"contentType": "text", "content": "retyped"},
+        "sender": {"name": "S", "address": "other@example.com"},
+        "receivedDateTime": "2026-03-10T12:00:01.000Z",
+    }
+    store.save_message(typed, root=root)
+    uri = f"mail:///messages/ID1a?owner={BOX}"
+    path = write_capture(
+        config.captured_dir(), "20260913T1", READ, {"uri": uri}, message(1)
+    )
+    result = CliRunner().invoke(app, ["import"])
+    assert result.exit_code == 0
+    [line] = [s for s in result.output.splitlines() if "DIFFERS" in s]
+    assert line == (
+        "  DIFFERS from the stored copy in body.content, body.contentType, "
+        f"receivedDateTime, sender.address, sender.name (+1 more): {path}"
+    )
+    assert "--replace" not in result.output
+
+
+def test_import_lists_a_stored_copy_that_is_not_json_and_goes_on(tmp_path):
+    root = config.archive_dir()
+    stored, _ = store.save_message(message(1), root=root)
+    stored.write_text(stored.read_text(encoding="utf-8")[:40], encoding="utf-8")
+    captured = config.captured_dir()
+    first = write_capture(
+        captured,
+        "20260913T1",
+        READ,
+        {"uri": f"mail:///messages/ID1a?owner={BOX}"},
+        message(1),
+    )
+    write_capture(
+        captured,
+        "20260913T2",
+        READ,
+        {"uri": f"mail:///messages/ID2a?owner={BOX}"},
+        message(2),
+    )
+    result = CliRunner().invoke(app, ["import"])
+    assert result.exit_code == 0, result.output
+    [line] = [s for s in result.output.splitlines() if "DIFFERS" in s]
+    assert line == f"  DIFFERS from the stored copy: {first}"
+    key = store.id_hash("<m2@example.com>")
+    assert (root / "messages" / f"{key}.json").is_file()
 
 
 def test_replace_moves_a_wrong_month_hit_and_drops_its_duplicate(tmp_path):
@@ -439,7 +524,8 @@ def test_replace_never_overwrites_with_a_partial_message(tmp_path):
     path = write_capture(folder, "20260913T1", READ, {"uri": uri}, partial)
     captures, _ = cp.load_captures([folder])
     done = cp.import_captures(captures, root=root, replace=True)
-    assert done.messages_differ == [path] and done.messages_replaced == []
+    assert done.messages_differ == [(path, ["body"])]
+    assert done.messages_replaced == []
     assert "body" in store.load_messages(root)["<m1@example.com>"]
 
 
@@ -623,6 +709,101 @@ def test_report_counts_lookup_hits_in_gaps_unread_hits_and_ledger_lag():
     )
     assert "  2026-03  1" in lines
     assert "  the ledger lags coverage: archived mail not yet classified" in lines
+
+
+ROW = {
+    "mailbox": BOX,
+    "after": "2026-03-01T08:00:00Z",
+    "before": "2026-04-01T07:00:00Z",
+}
+
+
+def footer(lines):
+    return [s for s in lines if s.startswith("next sweep from")]
+
+
+def test_next_sweep_is_the_ledger_mark_less_the_margin():
+    ledger = [
+        {"received": "2026-03-19T00:00:00Z"},
+        {"received": "2026-03-20T00:02:00Z"},
+    ]
+    lines = cv.report(BOX, [ROW], {}, set(), ledger, now=ts("2026-05-01T07:00:00Z"))
+    assert lines[-1] == "next sweep from         2026-03-19T23:57:00Z"
+    assert cv.SWEEP_MARGIN.total_seconds() == 300
+
+
+def test_next_sweep_is_the_coverage_end_when_that_is_earlier():
+    ledger = [{"received": "2026-04-02T00:00:00Z"}]
+    lines = cv.report(BOX, [ROW], {}, set(), ledger, now=ts("2026-05-01T07:00:00Z"))
+    assert footer(lines) == ["next sweep from         2026-04-01T07:00:00Z"]
+    # Within the margin of the end, the margin still applies.
+    ledger = [{"received": "2026-04-01T07:03:00Z"}]
+    lines = cv.report(BOX, [ROW], {}, set(), ledger, now=ts("2026-05-01T07:00:00Z"))
+    assert footer(lines) == ["next sweep from         2026-04-01T06:58:00Z"]
+
+
+def test_next_sweep_without_a_ledger_without_coverage_and_without_either():
+    now = ts("2026-05-01T07:00:00Z")
+    lines = cv.report(BOX, [ROW], {}, set(), [], now=now)
+    assert footer(lines) == ["next sweep from         2026-04-01T07:00:00Z"]
+    ledger = [{"received": "2026-03-20T00:00:00Z"}]
+    lines = cv.report(BOX, [], {}, set(), ledger, now=now)
+    assert footer(lines) == ["next sweep from         2026-03-19T23:55:00Z"]
+    assert footer(cv.report(BOX, [], {}, set(), [], now=now)) == []
+
+
+def test_next_sweep_ignores_another_mailbox_in_the_ledger():
+    ledger = [
+        {"mailbox": BOX, "received": "2026-03-20T00:00:00Z"},
+        {"mailbox": "other@example.org", "received": "2026-03-25T00:00:00Z"},
+    ]
+    lines = cv.report(BOX, [], {}, set(), ledger, now=ts("2026-05-01T07:00:00Z"))
+    assert footer(lines) == ["next sweep from         2026-03-19T23:55:00Z"]
+
+
+def test_cli_coverage_reads_a_ledger_kept_elsewhere(tmp_path):
+    elsewhere = tmp_path / "records" / "sweep-ledger.csv"
+    elsewhere.parent.mkdir()
+    elsewhere.write_text(
+        "internet_message_id,received,outcome\n"
+        "<m1@example.com>,2026-03-20T00:00:00Z,filed\n",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+    assert "next sweep from" not in runner.invoke(app, ["coverage"]).output
+    result = runner.invoke(app, ["coverage", "--ledger", str(elsewhere)])
+    assert result.exit_code == 0
+    assert result.output.splitlines()[-1] == (
+        "next sweep from         2026-03-19T23:55:00Z"
+    )
+
+
+def test_cli_coverage_refuses_a_ledger_that_is_not_a_file(tmp_path):
+    result = CliRunner().invoke(
+        app, ["coverage", "--ledger", str(tmp_path / "typo.csv")]
+    )
+    assert result.exit_code == 1
+    assert "typo.csv is not a file" in result.output
+    assert "next sweep from" not in result.output
+
+
+def test_the_sweep_asks_where_to_start_on_an_empty_ledger():
+    from importlib.resources import files
+
+    sweep = (files("outlooks.prompts") / "skills/sweep/SKILL.md").read_text("utf-8")
+    step = sweep.split("## 1. Sweep (step `sweep`)", 1)[1].split("\n## ", 1)[0]
+    asks = step.split("An empty ledger has no high-water mark", 1)[1]
+    assert "Ask the operator where to start, in both cases" in asks
+    assert "has never been classified" in asks
+
+
+def test_the_sweep_names_the_margin_coverage_uses():
+    from importlib.resources import files
+
+    sweep = (files("outlooks.prompts") / "skills/sweep/SKILL.md").read_text("utf-8")
+    assert cv.SWEEP_MARGIN.total_seconds() == 5 * 60
+    assert "**minus five minutes**" in sweep
+    assert "`next sweep from`" in sweep
 
 
 def test_report_names_the_zone_by_its_short_label():

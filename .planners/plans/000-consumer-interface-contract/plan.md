@@ -1,0 +1,448 @@
+---
+id: 0
+slug: consumer-interface-contract
+status: done
+branch: feature/consumer-interface-contract
+created: 2026-09-29T01:49:08-07:00
+concluded: 2026-09-29T02:46:49-07:00
+pr: https://github.com/gitronald/outlooks/pull/1
+---
+
+# Declare and harden the interface a consuming repo builds on
+
+## Plan
+
+### Goal
+
+A repo that adopts this package builds on more than the commands in the
+README. It imports modules, links the skill's steps from its own skills,
+copies default settings into its own table, pins a release tag, and runs the
+status commands by hand after every upgrade. None of that is declared today,
+so none of it is safe to build on: a rename, a renumbered step, a changed
+default, or a moved tag breaks the repo with no warning and no changelog
+line.
+
+This plan declares that interface, tests it, and closes the places where a
+consuming repo currently has to do by hand what the package already knows.
+The package stays generic. Nothing here teaches it what a particular repo's
+mail means.
+
+### Two shapes of consuming repo
+
+Every item below is judged against both.
+
+| Shape | Uses | Depends on |
+|---|---|---|
+| **Operator only** | the CLI, the skill, and the capture hook, from an interactive session | command names, output lines, exit codes, settings keys and defaults, the skill's steps |
+| **Importing** | all of the above, plus `import outlooks` in its own code and tests | the names and signatures of the modules it imports, and the archive's file format |
+
+### Scope
+
+#### A. Declare the Python API
+
+1. Give `store`, `classify`, `detail`, and `config` an `__all__` that names
+   what a consuming repo may import. The starting list is what reading an
+   archive and refining a role needs:
+
+   | Module | Public names |
+   |---|---|
+   | `outlooks.store` | `archive_root`, `id_hash`, `stable`, `load_hits`, `load_messages`, `newest_hit`, `StoreError` |
+   | `outlooks.classify` | `Mail`, `Facts`, `view`, `classify`, `is_reply`, `thread_subject` |
+   | `outlooks.detail` | `detail`, `details_by_id`, `body_text` |
+   | `outlooks.config` | `Settings`, `load`, `settings`, `KEYS`, `DEFAULTS`, `ConfigError`, and the path and zone helpers |
+
+   Settle the list by reading each module, not by copying this table. The
+   write paths (`save_*`, `replace_*`) stay out: a consuming repo fills the
+   archive through `outlooks import`, never by calling the store.
+2. Every other module (`capture`, `coverage`, `sizing`, `window_plan`,
+   `lookup`, `worklist`, `render`, `hook`, `host`, `cli`) is internal, and
+   says so in its docstring. The CLI is their interface.
+3. A contract test imports each public name and pins each public function's
+   parameter names, so a rename fails a test before it reaches a release.
+4. A "Python API" section in the README: the table above, one reading
+   example, and one refining example (item B).
+
+#### B. Show how a repo refines a role without the package learning its domain
+
+`classify` reports the role a message plays (`arrival`, `followup`, `ours`,
+`decision`, `system`) and stops there. What a system sender's notification
+says is the repo's own business, and the right place for it is a thin wrapper
+in the repo. The README example shows that shape with an invented system:
+
+```python
+import re
+
+from outlooks import classify as cl
+
+OPENED = re.compile(r"Ticket #(\d+) was opened by (.+?)\.")
+
+
+def facts(payload):
+    mail = cl.view(payload)
+    base = cl.classify(mail)
+    if base.role != "system":
+        return base.role, None
+    found = OPENED.search(mail.text)
+    return ("system-opened", int(found[1])) if found else ("system-other", None)
+```
+
+The example is the whole deliverable. The package gains no parser, no
+registry of notification types, and no plug-in mechanism: a wrapper in the
+repo is simpler than any hook the package could offer, and it keeps the
+repo's vocabulary out of the package. Check that `Mail` exposes what such a
+wrapper needs (subject, body text, sender, recipients) under public names,
+and add what is missing.
+
+#### C. One command that says the repo is wired correctly
+
+After an upgrade a repo runs `outlooks config`, `outlooks hook`, and
+`outlooks install --check` one by one, and its CI runs none of them. Add
+`outlooks doctor`: read-only, no connector, one line per check, exit 1 if any
+fails.
+
+| Check | Fails when |
+|---|---|
+| settings | the table is missing or a key does not parse |
+| profile | `profile` is set and the file does not exist |
+| archive | `archive_dir` exists and `coverage.csv` or a hits file does not parse |
+| hook script | `missing`, `stale`, or `differs` |
+| hook settings entry | missing or pointing elsewhere |
+| skill stub | not current for the installed version |
+
+It reuses the functions behind the three commands, so there is one
+definition of `ok`. The README's upgrade recipe ends with it, and its CI
+example runs it.
+
+#### D. Give the skill's steps names a repo can link
+
+A repo's own skill says "run the sweep's step 1, then its steps 2 and 3". A
+renumbering silently changes what that sentence means.
+
+1. Each numbered step in the three modes keeps its number and gains a fixed
+   name in its heading, which is what another skill should cite (for the
+   sweep: `sweep`, `classify`, `match`, `worklist`, `file`, `ledger`,
+   `report`).
+2. A test pins the ordered list of step names per mode, so adding,
+   removing, or reordering a step is a deliberate edit to the test.
+3. `outlooks doc profile-template` tells a repo to cite steps by name.
+
+#### E. Print the next sweep's start instead of leaving the arithmetic to the session
+
+`outlooks coverage` prints the ledger's high-water mark and the end of
+coverage in local time. The sweep then needs a UTC instant, five minutes
+before the earlier of the two. That is a time zone conversion and a
+subtraction done by a model, in the one place where a wrong value silently
+skips mail.
+
+1. `coverage` prints one more line, the instant to pass as `afterDateTime`:
+   `next sweep from  2026-01-05T17:55:00Z`. It is the earlier of the ledger
+   mark less the margin and the coverage end. With no ledger rows it prints
+   the coverage end, and with neither it prints nothing.
+2. The margin is one constant, used by `coverage` and named in the sweep's
+   text.
+3. The sweep's step 1 reads the line instead of computing it.
+
+#### F. Say what differs when a capture disagrees with the stored copy
+
+`import` prints `DIFFERS from the stored copy (--replace rewrites)` and the
+path. Whether `--replace` is safe depends on which copy is right, and the
+operator has to diff two JSON files by hand to find out.
+
+1. Each `DIFFERS` line names the fields that differ, as dotted paths (for
+   example `attachments[].uri`, `body.content`), capped at a handful.
+2. The line stops advertising `--replace` as the fix. The README says when
+   it is one (the stored copy was not written from a capture) and when it
+   is not (the capture is the older of the two), and that `import <paths>
+   --replace` limits the rewrite to the captures named.
+
+#### G. Document the timeline file, and fail on a missing key by name
+
+A timeline file is scratch, but a lookup resumed from an earlier run reads
+it, and `check` decides `ok` from its keys.
+
+1. The lookup skill's reference lists every key of a timeline file, which
+   ones `check` reads, and which are required.
+2. `check` reports a required key that is absent as its own finding
+   (`missing key date_local`), not as a date mismatch, so a file written by
+   another build is recognizable as such.
+3. A change to a key `check` reads is a changelog entry under *Changed*.
+
+#### H. A repeat lookup must not mix with the last one
+
+Searchers write `{name}-*page-{n}.json` into the scratch directory, and
+`split` merges every page file for that name. A second lookup of the same
+name overwrites the pages it rewrites and inherits the ones it does not.
+
+Add `outlooks lookup-reset <name>` (final name settled at implementation),
+which moves that name's page and timeline files into
+`{scratch_dir}/earlier/{timestamp}/` and prints what it moved. It deletes
+nothing. The lookup skill runs it before launching searchers.
+
+#### I. Report senders, so an unlisted system sender is visible
+
+A notifier that is not in `system_senders` is classified as a person
+writing in: its mail becomes an `arrival`, and its address looks like a
+correspondent's. Nothing reports this, because nothing is wrong with any
+single message.
+
+Add `outlooks senders [--since YYYY-MM-DD]`: inbound hits counted by sender
+address, most frequent first, each marked `own`, `system`, or unlisted.
+Read-only over the hits tier. The profile template's *Who we are* heading
+points at it as the way to find system senders in the first place.
+
+#### J. README: install, upgrade, and trying it safely
+
+1. **Install.** Replace the current advice, which assumes CI cannot clone
+   the repository. Two recipes, one per shape: operator only (its own
+   dependency group, so the consuming package cannot import it by
+   accident), and importing (a plain dependency). Both pin a tag.
+2. **Upgrade.** Bump the tag, `uv lock --upgrade-package outlooks`,
+   `outlooks hook --apply`, `outlooks install`, `outlooks doctor`. Say that
+   the lock file's commit hash is the pin that holds.
+3. **Trying it without touching the archive.** `OUTLOOKS_ARCHIVE_DIR` and
+   `OUTLOOKS_SCRATCH_DIR` pointed at a scratch copy run any command against
+   the copy. One paragraph and an example.
+4. **Testing against it.** A consuming repo's tests pin the settings
+   through `OUTLOOKS_*` in a fixture, so they never depend on the repo's
+   own table.
+
+#### K. Release discipline
+
+1. **A published tag never moves.** A fix ships as the next version, under
+   its own changelog heading. Stated in the README's development section.
+2. **What counts as a change a consumer must hear about**, listed under
+   *Changed* or *Removed* with what to do: a public Python name or
+   parameter, a settings key or its default, the archive's file format, a
+   command's name or exit code, a line another tool is told to read (the
+   `coverage` footer, `COVERED`, `INCOMPLETE`, `DIFFERS`), a skill step's
+   name, and a timeline key. Defaults are on the list because a repo that
+   leaves a key unset still has paths baked into its hook script and its
+   ignore file.
+3. **Publish to PyPI.** A git source cannot be resolved on a network that
+   allows only the package index, and cannot be pinned by version range.
+   The publish workflow is already in the repo, disabled. The index side is
+   ready (see the Log): the name is reserved and a trusted publisher is
+   registered for this repository. What is left is on this side: set
+   `PUBLISH_ENABLED`, and confirm the workflow file name and the `pypi`
+   environment match what the publisher was registered with. The README's
+   recipes then name the index first and the git source second.
+
+### Out of scope
+
+Considered and left to the consuming repo, because the package cannot do
+them without learning a domain:
+
+- Parsing what a system sender's notifications say, and any vocabulary for
+  it (item B shows the wrapper instead).
+- Mapping a decision's label onto a repo's outcome words.
+- Resolving a name or address against a repo's registries.
+- Checking a repo's records against the mail.
+- A `render` naming scheme beyond `render_label`, `--stage`, and `--label`.
+
+Also out:
+
+- Any list of names the package had before its first release. The
+  changelog starts at 0.1.0.
+- Changing the archive's format.
+- A plug-in or entry-point mechanism for classification.
+
+### Key decisions
+
+- **Declare less, not more.** A name is public only if reading the archive
+  or refining a role needs it. Widening the list later is cheap, and
+  narrowing it is a breaking change.
+- **New commands are read-only**, except `lookup-reset`, which moves
+  scratch files and never deletes.
+- **Lines that tools read are part of the interface.** Items E and F change
+  such lines, so both land in one release with a *Changed* entry each.
+- **Examples are invented.** Every address is `example.org`, every system
+  is a generic one (a ticketing system, a web form), and no example is
+  taken from a real mailbox or a real repo.
+
+### Implementation order
+
+Each step is one commit or a small group, with its tests and its changelog
+line.
+
+1. A, then B: `__all__`, the internal-module docstrings, the contract test,
+   and the README's API section.
+2. K.2: the changelog policy, so the following steps have somewhere to be
+   recorded.
+3. E and F: the `coverage` line and the `DIFFERS` detail, with the sweep
+   text.
+4. G and H: the timeline reference, the missing-key finding, and
+   `lookup-reset`.
+5. D: step names and the pinning test.
+6. I: `senders`.
+7. C: `doctor`, last of the commands because it checks what the others
+   settle.
+8. J and K.1: the README.
+9. Gate: `ruff check`, `ruff format --check`, `pyrefly check`, `pytest`,
+   and a scan of the tree for anything that is not an invented example.
+10. K.3: set `PUBLISH_ENABLED` before the release that carries this plan,
+    so its tag is the first upload. The index side is ready.
+
+## Log
+
+### 2026-09-29: the index side of publishing is ready
+
+Logged 2026-09-29T01:58:07-07:00. The maintainer reserved the name `outlooks`
+on PyPI and registered this repository as its trusted publisher, which was
+the part of K.3 that could not be done from the repo.
+
+Checked from the repo, read-only:
+
+| Check | Result |
+|---|---|
+| Repository variables | none set, so `PUBLISH_ENABLED` is still off and a tag push publishes nothing |
+| Repository environments | none; the workflow's `pypi` environment is created on its first run |
+| The project's page on the index | not found, as expected before a first upload |
+
+Not verified: that the publisher was registered with the workflow file name
+`publish.yml` and the environment name `pypi`. A mismatch in either fails
+the first upload at the token exchange, not before.
+
+Nothing was enabled. K.3 and step 10 of the implementation order now say
+what is left.
+
+### 2026-09-29: steps 1 to 9 implemented
+
+Logged 2026-09-29T02:19:06-07:00. Steps 1 to 9 of the implementation order
+are on the branch, one commit or a small group each, with tests and
+changelog entries. Step 10 (K.3) is not done: see the end of this entry.
+
+| Step | Item | What landed |
+|---|---|---|
+| 1 | A, B | `__all__` on `store`, `classify`, `detail`, and `config`; the internal note in every other module's docstring; `tests/test_contract.py`; the README's "Python API" section, whose two examples the contract test runs |
+| 2 | K.2 | the list of consumer-facing changes, in the changelog's preamble |
+| 3 | E, F | the `next sweep from` line and `SWEEP_MARGIN`; the fields on a `DIFFERS` line; the sweep's step 1 reads the line |
+| 4 | G, H | `outlooks doc lookup/timeline`; `check` prints why a row is `BAD`; `outlooks lookup-reset` |
+| 5 | D | a fixed name on every step of the three modes; `tests/test_steps.py` |
+| 6 | I | `outlooks senders` |
+| 7 | C | `outlooks doctor` |
+| 8 | J, K.1 | the README's install, upgrade, CI, trial, testing, and releases sections |
+| 9 | gate | `ruff check`, `ruff format --check`, `pyrefly check`, and `pytest` (325 passed) are clean, and CI passes on Python 3.11 to 3.14 |
+
+Decisions made while implementing:
+
+- **The public list for `config`** names `mailbox` beside the path and zone
+  helpers. Reading an archive for the signed-in account's own mailbox needs
+  the address it is filed under, and `settings().mailbox` is unset there.
+  `declared_path`, `describe`, and the new `unknown_keys` stay out.
+- **The contract test pins more than parameter names**: the fields of the
+  public dataclasses (`Mail`, `Facts`, `Settings`), the settings keys and
+  defaults, and the command names, since K.2 lists each as part of the
+  interface.
+- **`coverage` takes `--ledger <path>`**, which the plan did not list. The
+  profile may keep the ledger somewhere other than `ledger.csv` in
+  `archive_dir`, and `coverage` would then print the end of coverage as the
+  next sweep's start, past mail the ledger never classified. The sweep's
+  step 1 says when to pass it.
+- **`lookup-reset` keeps that name.** It moves exactly the page files the
+  split would merge, through one shared function, and takes the next free
+  folder when two resets land in the same second.
+- **Step names.** A numbered heading ends in the name, and a numbered list
+  item opens with it. Window mode's three procedures share numbers, so its
+  names carry the procedure (`pull-import`, `collect-import`,
+  `read-import`) and each is unique in the mode.
+- **`doctor` fails on a key that is not a setting**, as part of the
+  settings check: a misspelled key is otherwise ignored and its default
+  used. A check that needs the settings reports `not checked` and fails
+  when they do not load.
+- **The tree scan** (addresses, URLs, local paths) was run from a scratch
+  script outside the repo. Nothing this plan added was flagged.
+
+Not done: step 10. `PUBLISH_ENABLED` is still unset. Setting it makes the
+next tag push upload to the index, which cannot be undone, and whether the
+publisher was registered with the workflow file name `publish.yml` and the
+environment name `pypi` cannot be read from the repo.
+
+### 2026-09-29: publishing is enabled at the release, not before
+
+Logged 2026-09-29T02:20:29-07:00. The maintainer confirmed that the trusted
+publisher was registered with the workflow file name `publish.yml` and the
+environment name `pypi`, which is what the workflow in the repo uses, so the
+item the earlier entry left unverified is settled.
+
+`PUBLISH_ENABLED` stays unset until the release that carries this plan is
+cut. Step 10 is then one command, run before the tag is pushed:
+`gh variable set PUBLISH_ENABLED --body true`.
+
+### 2026-09-29: publishing enabled
+
+Logged 2026-09-29T02:28:28-07:00. The maintainer asked for the variable to be
+set now, ahead of the release, which supersedes the entry above.
+`PUBLISH_ENABLED` is `true` on the repository, so step 10 is done. Nothing
+was uploaded: the workflow runs on a `v*` tag push, and none has been pushed
+since. The next one is the first upload.
+
+### 2026-09-29: review before merge, and its fixes
+
+Logged 2026-09-29T02:47:21-07:00. The review ran at the high level: four
+finders over the branch's diff, then one verifier per file. Of 16
+candidates, 9 were kept and 7 rejected or dropped. The review is posted on
+the pull request.
+
+**Review follow-up.** All 9 are fixed, each with a test:
+
+| Finding | Fix | Test |
+|---|---|---|
+| `lookup-reset` moved, and `split` merged, the pages of a lookup whose name starts with this one's | `page_files` matches the name, one of `PAGE_KINDS` or none, and `page-{n}.json` | `test_page_files_are_the_names_own_and_no_longer_names`, `test_split_leaves_out_the_pages_of_a_longer_name`, and the reset test's `others` |
+| `coverage --ledger` read a path that does not exist as an empty ledger | a path that is not a file is an error, exit 1 | `test_cli_coverage_refuses_a_ledger_that_is_not_a_file` |
+| an empty ledger with recorded coverage started the sweep at the end of coverage without asking | the sweep's step 1 asks the operator on an empty ledger, with or without the line | `test_the_sweep_asks_where_to_start_on_an_empty_ledger` |
+| a stored message that is not JSON ended the import | `_differing` names no field for it, and the import goes on | `test_import_lists_a_stored_copy_that_is_not_json_and_goes_on` |
+| the `DIFFERS` line with no field named had no test | none needed in the code | the same test |
+| a coverage row of another length, or a null `receivedDateTime`, crashed `doctor` | the archive check tests both before parsing | `test_archive_fails_on_a_coverage_row_of_another_length`, and two more hits lines |
+| a settings file of another shape crashed `doctor` | `hook` raises `ValueError` for it, and `hook --apply` leaves such a file alone | `test_hook_settings_entry_fails_on_settings_of_another_shape`, `test_apply_refuses_settings_of_another_shape_and_leaves_them` |
+| the hook settings check depended on the package settings | `hook.settings_state` reads the settings file only | `test_hook_settings_entry_is_checked_when_the_settings_do_not_load`, `test_settings_state_stands_without_the_script_or_the_package_settings` |
+| the contract test pinned parameter names only | a parameter is pinned with its default and its kind | `test_a_parameter_is_written_with_its_default_and_its_kind` |
+
+Two of the fixes change what a consumer sees, and the changelog says so:
+`split` no longer merges a longer name's pages (*Fixed*), and `--ledger`
+with a path that is not a file exits 1 (*Added*, with the option).
+
+Conscious no-ops:
+
+- `doctor` parses `coverage.csv` and the hits files itself. The package's
+  readers name no file or line, which a check has to.
+- `TIMELINE_KEYS` and `CHECK_READS` are read only by tests, which pin them
+  against the writer's output and the reference document.
+- `senders.is_inbound` and `lookup.direction` answer different questions.
+- A malformed `receivedDateTime` raises in `senders` as in every other
+  reader, and `doctor` is what reports it.
+- `check` on a timeline file that is not a JSON object raises as it did
+  before this plan.
+- The README names the package index first, which is right for the release
+  that carries it.
+- `check` tests whether the stored message exists more than once per row.
+
+Gate after the fixes: `ruff check`, `ruff format --check`, `pyrefly check`,
+and `pytest` (345 passed).
+
+## Retrospective
+
+- **The plan's order held.** Every item landed in the step the plan gave
+  it, and the one addition, `coverage --ledger`, came from following item E
+  to its end: a line that a session passes on as printed has to be computed
+  from the ledger the repo actually keeps.
+- **A new command can make an old pattern dangerous.** The page-file glob
+  was in `split` before this plan, where a wrong match added pages to a
+  merge that the term filter then narrowed. Sharing it with `lookup-reset`
+  turned the same match into moved files. Extracting a helper is the moment to ask what its
+  new caller does with a wrong answer.
+- **"Reports, never crashes" needs its own tests.** Most of what the review
+  found was in `doctor` and `import`: commands whose promise is one line
+  per problem. Their tests covered the malformed inputs the author thought
+  of, and the handlers caught the exceptions those raise. Inputs of the
+  wrong shape (a list for an object, a null for a string) raise others.
+- **A printed value that is acted on needs a loud failure.** `next sweep
+  from` moved arithmetic out of the session, which is the gain, but it also
+  made two silent fallbacks (a mistyped ledger path, an empty ledger)
+  decide where a sweep starts. Both now stop and say so.
+- **Pinning the interface paid for itself in the review.** With command
+  names, step names, settings, and the public names under test, the review
+  could spend its time on behavior, and the fixes to it could not move the
+  interface without a test saying so.
+- **Next time, run the review's edge-case pass before the README.** Two
+  fixes changed sentences the README and the changelog had already
+  settled.

@@ -23,6 +23,16 @@ from typing import Any
 
 from outlooks import config
 
+# The names a consuming repo may import; a change to one is a changelog entry.
+__all__ = [
+    "Facts",
+    "Mail",
+    "classify",
+    "is_reply",
+    "thread_subject",
+    "view",
+]
+
 REPLY_PREFIX = re.compile(
     r"^\s*(?:(?:re|aw|fw|fwd|wg|sv|antw|automatic reply|auto(?:matic)? response"
     r"|out of office|undeliverable)\s*:|\[external\])\s*",

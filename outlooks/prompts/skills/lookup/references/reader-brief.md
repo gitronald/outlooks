@@ -42,7 +42,9 @@ Your worklist file lists lines `NAME-NN <uri>`. For each line:
    result is too large and comes back as a note naming a saved file, check
    that file's `attachments` entries with `jq` or `uv run python` (never bare
    `python3`); the hook already captured the result.
-4. Write `<scratch>/NAME-NN.timeline.json` with keys:
+4. Write `<scratch>/NAME-NN.timeline.json` with these keys, named exactly
+   as here (`{cli} doc lookup/timeline` is the full list; `date_local` and
+   `internet_message_id` are required):
    - `file`: `<archive_dir>/messages/<hash>.json`, where `<hash>` is printed
      by `{cli} hash <internetMessageId>`; the file appears once the main
      session imports;

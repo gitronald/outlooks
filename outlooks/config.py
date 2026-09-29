@@ -36,6 +36,22 @@ from functools import cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+# The names a consuming repo may import; a change to one is a changelog entry.
+__all__ = [
+    "DEFAULTS",
+    "KEYS",
+    "ConfigError",
+    "Settings",
+    "archive_dir",
+    "captured_dir",
+    "load",
+    "mailbox",
+    "scratch_dir",
+    "settings",
+    "zone",
+    "zone_label",
+]
+
 DEFAULTS = {
     "archive_dir": "data/outlook",
     "captured_dir": "temp/outlook/captured",
@@ -148,6 +164,15 @@ def load(start: Path | None = None) -> Settings:
         profile=path("profile"),
         origins=origins,
     )
+
+
+def unknown_keys(start: Path | None = None) -> list[str]:
+    """The keys of the ``[tool.outlooks]`` table that are not settings.
+
+    A misspelled key is otherwise ignored, and its default used, in silence.
+    """
+    _, _, table = _table((start or Path.cwd()).resolve())
+    return sorted(key for key in table if key not in KEYS)
 
 
 def declared_path(key: str, start: Path | None = None) -> Path:

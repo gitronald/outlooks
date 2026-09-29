@@ -5,6 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from outlooks import hook as hk
 
 
@@ -208,3 +210,29 @@ def test_a_stale_script_with_a_local_change_differs(tmp_path):
     _configure(tmp_path, "scratch/captured")
     assert hk.status(tmp_path).script == "differs"
     assert hk.apply(tmp_path) == []
+
+
+def test_settings_state_stands_without_the_script_or_the_package_settings(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[tool.outlooks\n", encoding="utf-8")
+    assert hk.settings_state(tmp_path) == "missing"
+    entry = {
+        "matcher": hk.MATCHER,
+        "hooks": [{"type": "command", "command": hk.COMMAND}],
+    }
+    path = tmp_path / hk.SETTINGS_PATH
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"hooks": {"PostToolUse": [entry]}}), encoding="utf-8")
+    assert hk.settings_state(tmp_path) == "ok"
+
+
+@pytest.mark.parametrize(
+    "settings", ["[]", '{"hooks": []}', '{"hooks": {"PostToolUse": 1}}']
+)
+def test_apply_refuses_settings_of_another_shape_and_leaves_them(tmp_path, settings):
+    path = tmp_path / hk.SETTINGS_PATH
+    path.parent.mkdir(parents=True)
+    path.write_text(settings, encoding="utf-8")
+    with pytest.raises(ValueError, match="not a"):
+        hk.apply(tmp_path)
+    assert path.read_text(encoding="utf-8") == settings
+    assert not (tmp_path / hk.SCRIPT_PATH).exists()

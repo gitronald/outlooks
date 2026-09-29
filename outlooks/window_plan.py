@@ -13,6 +13,9 @@ probe of exactly those bounds), and the ordered, contiguous pieces. Sizes come
 from ``sizing.window_sizes`` (``fill``), never invented for a piece with no
 capture -- a throttled or failed call leaves no capture, which is not the same
 as an empty window.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations

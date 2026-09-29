@@ -5,6 +5,9 @@ doc``), installing the version-stamped ``/outlooks`` dispatcher stub, and the
 drift check. This module declares what it acts on, plus the one piece of
 per-repo wiring it cannot see: the capture hook, reported by ``install
 --check`` and never gated on.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations
@@ -81,6 +84,10 @@ HOST = Host(
         Doc(
             name="lookup/reader-brief",
             source="skills/lookup/references/reader-brief.md",
+        ),
+        Doc(
+            name="lookup/timeline",
+            source="skills/lookup/references/timeline.md",
         ),
         Doc(
             name="window/pager-brief", source="skills/window/references/pager-brief.md"

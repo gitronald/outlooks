@@ -5,6 +5,9 @@ listed in the range that has neither a captured read nor an archived file,
 numbered oldest-first and written ``per`` to a batch file. :func:`audit` checks
 the archived messages of a period for missing attachment texts. Neither writes
 anything under the archive.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations

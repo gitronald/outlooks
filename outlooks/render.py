@@ -9,6 +9,9 @@ body. The body is the message HTML with the mail gateway's additions removed
 pointed back at their original URLs; the sender's text is left as it is. For a
 letter sent as an attachment, ``text`` (the attachment's extracted text) replaces
 the body. pandoc renders the result to .docx.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations

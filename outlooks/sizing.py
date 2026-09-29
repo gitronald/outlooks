@@ -15,6 +15,9 @@ give the distinct-message count, the gap between the two being folder copies.
 The proof is only reproducible while the captures under
 the captures directory (gitignored) still exist — once they're gone,
 ``coverage.csv`` is the durable record.
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations
