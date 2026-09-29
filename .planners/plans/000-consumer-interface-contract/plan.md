@@ -1,8 +1,8 @@
 ---
 id: 0
 slug: consumer-interface-contract
-status: draft
-branch:
+status: active
+branch: feature/consumer-interface-contract
 created: 2026-09-29T01:49:08-07:00
 concluded:
 pr:
