@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
 
 import pkgskills
+from pkgskills.stamp import PREFIX
 
 from outlooks import config, coverage, hook
 from outlooks.host import HOST
@@ -35,6 +37,9 @@ CHECKS = (
     "hook settings entry",
     "skill stub",
 )
+
+# The version a stub's stamp line names: the release that wrote the stub.
+STAMPED = re.compile(rf"(?m)^{re.escape(PREFIX)}{re.escape(HOST.dist)} (\S+) ")
 
 
 @dataclass(frozen=True)
@@ -149,7 +154,18 @@ def _stub(root: Path) -> str:
     ]
     if bad:
         raise _Failed("; ".join(bad) + "; run `uv run outlooks install`")
-    return f"current for {HOST.dist} {HOST.resolved_version()}"
+    # The drift check passes over the stamp's version, so a stub an earlier
+    # release wrote is ok while its content is this release's. The note says
+    # which release stamped it, never that the stamp is this one's.
+    version = HOST.resolved_version()
+    text = "\n".join(row.path.read_text(encoding="utf-8") for row in rows)
+    stamped = sorted(set(STAMPED.findall(text)) - {version})
+    if stamped:
+        return (
+            f"content current for {HOST.dist} {version}, stamped by "
+            f"{', '.join(stamped)}; `uv run outlooks install` restamps it"
+        )
+    return f"current for {HOST.dist} {version}"
 
 
 def run(start: Path | None = None) -> list[Result]:
