@@ -284,3 +284,158 @@ def test_is_system_and_direction():
         == "out"
     )
     assert lk.direction("notices@system.example.org", ["desk@example.org"]) == "in"
+
+
+# --- timeline keys ------------------------------------------------------------
+
+
+def timeline(scratch, name, nn, **changes):
+    """A reader's timeline file for an archived message, with ``changes``."""
+    record = {
+        "file": "messages/x.json",
+        "received_utc": RECEIVED,
+        "date_local": "2025-12-31",
+        "direction": "in",
+        "sender": "priya.nakamura@example.com",
+        "to": ["desk@example.org"],
+        "subject": "subject",
+        "internet_message_id": "<e1>",
+        "weblink": "",
+        "attachments": [],
+        "summary": "",
+        "system": False,
+        **changes,
+    }
+    record = {k: v for k, v in record.items() if v is not None}
+    scratch.mkdir(parents=True, exist_ok=True)
+    path = scratch / f"{name}-{nn}.timeline.json"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    return path
+
+
+def test_check_says_why_a_row_is_bad(tmp_path):
+    scratch, archive = tmp_path / "scratch", tmp_path / "archive"
+    archive_message(
+        archive, hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    )
+    timeline(scratch, "priya", "01")
+    timeline(scratch, "priya", "02", date_local="2026-01-01")
+    timeline(scratch, "priya", "03", internet_message_id="<never-read>")
+    timeline(scratch, "priya", "04", date_local=None)
+    timeline(scratch, "priya", "05", internet_message_id=None, date_local="")
+    rows = lk.check("priya", scratch=scratch, archive=archive)
+    assert [(r.nn, r.ok, r.finding) for r in rows] == [
+        ("01", True, ""),
+        ("02", False, "date_local 2026-01-01, the archive says 2025-12-31"),
+        ("03", False, "not archived"),
+        ("04", False, "missing key date_local"),
+        ("05", False, "missing key internet_message_id, date_local"),
+    ]
+    # A file missing a key is still placed: the archive's date is reported.
+    assert rows[3].day == "2025-12-31" and rows[4].day == ""
+
+
+def test_the_split_writes_exactly_the_documented_keys(tmp_path):
+    scratch, archive = tmp_path / "scratch", tmp_path / "archive"
+    h = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    archive_message(archive, h)
+    write_page(scratch, "priya", 1, [h])
+    lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    written = json.loads((scratch / "priya-01.timeline.json").read_text("utf-8"))
+    assert tuple(written) == lk.TIMELINE_KEYS
+    assert set(lk.REQUIRED_KEYS) <= set(lk.CHECK_READS) <= set(lk.TIMELINE_KEYS)
+
+
+def test_the_timeline_reference_lists_every_key_as_the_code_reads_it():
+    from importlib.resources import files
+
+    folder = files("outlooks.prompts") / "skills/lookup/references"
+    rows = {}
+    for line in (folder / "timeline.md").read_text("utf-8").splitlines():
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) == 4 and cells[0].startswith("`"):
+            rows[cells[0].strip("`")] = (cells[2] == "yes", cells[3] == "yes")
+    assert tuple(rows) == lk.TIMELINE_KEYS
+    assert {k for k, (reads, _) in rows.items() if reads} == set(lk.CHECK_READS)
+    assert {k for k, (_, needs) in rows.items() if needs} == set(lk.REQUIRED_KEYS)
+    # The reader's brief names every key a reader writes.
+    brief = (folder / "reader-brief.md").read_text("utf-8")
+    for key in lk.TIMELINE_KEYS:
+        assert f"`{key}`" in brief or key == "source", key
+
+
+# --- reset --------------------------------------------------------------------
+
+
+def test_reset_moves_a_names_pages_and_timelines_and_nothing_else(tmp_path):
+    from datetime import datetime
+
+    scratch = tmp_path / "scratch"
+    h = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    mine = [
+        write_page(scratch, "priya", 1, [h]),
+        write_page(scratch, "priya-sender", 1, [h]),
+        write_page(scratch, "priya-sent", 2, [h]),
+        timeline(scratch, "priya", "01"),
+    ]
+    others = [
+        write_page(scratch, "morgan", 1, [h]),
+        timeline(scratch, "morgan", "01"),
+        timeline(scratch, "priya-n", "01"),
+        # Another lookup, whose name starts with this one's.
+        write_page(scratch, "priya-n", 1, [h]),
+        write_page(scratch, "priya-n-sent", 1, [h]),
+    ]
+    now = datetime(2026, 1, 5, 10, 15, 0)
+    folder, moved = lk.reset("priya", scratch=scratch, now=now)
+    assert folder == scratch / "earlier" / "20260105T101500"
+    assert sorted(p.name for p in moved) == sorted(p.name for p in mine)
+    assert all(p.parent == folder and p.exists() for p in moved)
+    assert not any(p.exists() for p in mine)
+    assert all(p.exists() for p in others)
+    # The split now finds nothing of the earlier lookup.
+    assert lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path).pages == 0
+
+
+def test_reset_never_overwrites_an_earlier_reset(tmp_path):
+    from datetime import datetime
+
+    scratch = tmp_path / "scratch"
+    now = datetime(2026, 1, 5, 10, 15, 0)
+    h = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    write_page(scratch, "priya", 1, [h])
+    first, _ = lk.reset("priya", scratch=scratch, now=now)
+    write_page(scratch, "priya", 1, [])
+    second, moved = lk.reset("priya", scratch=scratch, now=now)
+    assert second == scratch / "earlier" / "20260105T101500-2"
+    assert json.loads((first / "priya-page-01.json").read_text("utf-8")) == [h]
+    assert json.loads(moved[0].read_text("utf-8")) == []
+
+
+def test_reset_with_nothing_to_move_creates_nothing(tmp_path):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    _, moved = lk.reset("priya", scratch=scratch)
+    assert moved == [] and list(scratch.iterdir()) == []
+
+
+def test_page_files_are_the_names_own_and_no_longer_names(tmp_path):
+    scratch = tmp_path / "scratch"
+    h = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    mine = [write_page(scratch, f"priya{kind}", 1, [h]) for kind in ("", "-sender")]
+    mine += [write_page(scratch, f"priya-{kind}", 12, []) for kind in lk.PAGE_KINDS]
+    write_page(scratch, "priya-n", 1, [h])
+    write_page(scratch, "priya-n-title", 1, [h])
+    (scratch / "priya-page-notes.json").write_text("[]", encoding="utf-8")
+    assert lk.page_files(scratch, "priya") == sorted(set(mine))
+    assert len(lk.page_files(scratch, "priya-n")) == 2
+
+
+def test_split_leaves_out_the_pages_of_a_longer_name(tmp_path):
+    scratch = tmp_path / "scratch"
+    mine = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
+    other = hit("<e2>", "priya.nakamura@example.com", ["desk@example.org"])
+    write_page(scratch, "priya", 1, [mine])
+    write_page(scratch, "priya-n", 1, [other])
+    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path)
+    assert out.pages == 1

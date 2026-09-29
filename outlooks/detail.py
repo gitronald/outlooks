@@ -23,6 +23,13 @@ from typing import Any
 from outlooks import store
 from outlooks.render import clean_body, unwrap_text_links
 
+# The names a consuming repo may import; a change to one is a changelog entry.
+__all__ = [
+    "body_text",
+    "detail",
+    "details_by_id",
+]
+
 # A block boundary is a line break, opening tag as well as closing: Outlook and
 # Gmail both nest a message's paragraphs as sibling <div>s inside one wrapper
 # <div>, so breaking only on </div> ran the salutation into the first line.

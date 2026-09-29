@@ -1,11 +1,11 @@
 ---
 id: 0
 slug: consumer-interface-contract
-status: active
+status: done
 branch: feature/consumer-interface-contract
 created: 2026-09-29T01:49:08-07:00
-concluded:
-pr:
+concluded: 2026-09-29T02:46:49-07:00
+pr: https://github.com/gitronald/outlooks/pull/1
 ---
 
 # Declare and harden the interface a consuming repo builds on
@@ -304,3 +304,145 @@ the first upload at the token exchange, not before.
 
 Nothing was enabled. K.3 and step 10 of the implementation order now say
 what is left.
+
+### 2026-09-29: steps 1 to 9 implemented
+
+Logged 2026-09-29T02:19:06-07:00. Steps 1 to 9 of the implementation order
+are on the branch, one commit or a small group each, with tests and
+changelog entries. Step 10 (K.3) is not done: see the end of this entry.
+
+| Step | Item | What landed |
+|---|---|---|
+| 1 | A, B | `__all__` on `store`, `classify`, `detail`, and `config`; the internal note in every other module's docstring; `tests/test_contract.py`; the README's "Python API" section, whose two examples the contract test runs |
+| 2 | K.2 | the list of consumer-facing changes, in the changelog's preamble |
+| 3 | E, F | the `next sweep from` line and `SWEEP_MARGIN`; the fields on a `DIFFERS` line; the sweep's step 1 reads the line |
+| 4 | G, H | `outlooks doc lookup/timeline`; `check` prints why a row is `BAD`; `outlooks lookup-reset` |
+| 5 | D | a fixed name on every step of the three modes; `tests/test_steps.py` |
+| 6 | I | `outlooks senders` |
+| 7 | C | `outlooks doctor` |
+| 8 | J, K.1 | the README's install, upgrade, CI, trial, testing, and releases sections |
+| 9 | gate | `ruff check`, `ruff format --check`, `pyrefly check`, and `pytest` (325 passed) are clean, and CI passes on Python 3.11 to 3.14 |
+
+Decisions made while implementing:
+
+- **The public list for `config`** names `mailbox` beside the path and zone
+  helpers. Reading an archive for the signed-in account's own mailbox needs
+  the address it is filed under, and `settings().mailbox` is unset there.
+  `declared_path`, `describe`, and the new `unknown_keys` stay out.
+- **The contract test pins more than parameter names**: the fields of the
+  public dataclasses (`Mail`, `Facts`, `Settings`), the settings keys and
+  defaults, and the command names, since K.2 lists each as part of the
+  interface.
+- **`coverage` takes `--ledger <path>`**, which the plan did not list. The
+  profile may keep the ledger somewhere other than `ledger.csv` in
+  `archive_dir`, and `coverage` would then print the end of coverage as the
+  next sweep's start, past mail the ledger never classified. The sweep's
+  step 1 says when to pass it.
+- **`lookup-reset` keeps that name.** It moves exactly the page files the
+  split would merge, through one shared function, and takes the next free
+  folder when two resets land in the same second.
+- **Step names.** A numbered heading ends in the name, and a numbered list
+  item opens with it. Window mode's three procedures share numbers, so its
+  names carry the procedure (`pull-import`, `collect-import`,
+  `read-import`) and each is unique in the mode.
+- **`doctor` fails on a key that is not a setting**, as part of the
+  settings check: a misspelled key is otherwise ignored and its default
+  used. A check that needs the settings reports `not checked` and fails
+  when they do not load.
+- **The tree scan** (addresses, URLs, local paths) was run from a scratch
+  script outside the repo. Nothing this plan added was flagged.
+
+Not done: step 10. `PUBLISH_ENABLED` is still unset. Setting it makes the
+next tag push upload to the index, which cannot be undone, and whether the
+publisher was registered with the workflow file name `publish.yml` and the
+environment name `pypi` cannot be read from the repo.
+
+### 2026-09-29: publishing is enabled at the release, not before
+
+Logged 2026-09-29T02:20:29-07:00. The maintainer confirmed that the trusted
+publisher was registered with the workflow file name `publish.yml` and the
+environment name `pypi`, which is what the workflow in the repo uses, so the
+item the earlier entry left unverified is settled.
+
+`PUBLISH_ENABLED` stays unset until the release that carries this plan is
+cut. Step 10 is then one command, run before the tag is pushed:
+`gh variable set PUBLISH_ENABLED --body true`.
+
+### 2026-09-29: publishing enabled
+
+Logged 2026-09-29T02:28:28-07:00. The maintainer asked for the variable to be
+set now, ahead of the release, which supersedes the entry above.
+`PUBLISH_ENABLED` is `true` on the repository, so step 10 is done. Nothing
+was uploaded: the workflow runs on a `v*` tag push, and none has been pushed
+since. The next one is the first upload.
+
+### 2026-09-29: review before merge, and its fixes
+
+Logged 2026-09-29T02:47:21-07:00. The review ran at the high level: four
+finders over the branch's diff, then one verifier per file. Of 16
+candidates, 9 were kept and 7 rejected or dropped. The review is posted on
+the pull request.
+
+**Review follow-up.** All 9 are fixed, each with a test:
+
+| Finding | Fix | Test |
+|---|---|---|
+| `lookup-reset` moved, and `split` merged, the pages of a lookup whose name starts with this one's | `page_files` matches the name, one of `PAGE_KINDS` or none, and `page-{n}.json` | `test_page_files_are_the_names_own_and_no_longer_names`, `test_split_leaves_out_the_pages_of_a_longer_name`, and the reset test's `others` |
+| `coverage --ledger` read a path that does not exist as an empty ledger | a path that is not a file is an error, exit 1 | `test_cli_coverage_refuses_a_ledger_that_is_not_a_file` |
+| an empty ledger with recorded coverage started the sweep at the end of coverage without asking | the sweep's step 1 asks the operator on an empty ledger, with or without the line | `test_the_sweep_asks_where_to_start_on_an_empty_ledger` |
+| a stored message that is not JSON ended the import | `_differing` names no field for it, and the import goes on | `test_import_lists_a_stored_copy_that_is_not_json_and_goes_on` |
+| the `DIFFERS` line with no field named had no test | none needed in the code | the same test |
+| a coverage row of another length, or a null `receivedDateTime`, crashed `doctor` | the archive check tests both before parsing | `test_archive_fails_on_a_coverage_row_of_another_length`, and two more hits lines |
+| a settings file of another shape crashed `doctor` | `hook` raises `ValueError` for it, and `hook --apply` leaves such a file alone | `test_hook_settings_entry_fails_on_settings_of_another_shape`, `test_apply_refuses_settings_of_another_shape_and_leaves_them` |
+| the hook settings check depended on the package settings | `hook.settings_state` reads the settings file only | `test_hook_settings_entry_is_checked_when_the_settings_do_not_load`, `test_settings_state_stands_without_the_script_or_the_package_settings` |
+| the contract test pinned parameter names only | a parameter is pinned with its default and its kind | `test_a_parameter_is_written_with_its_default_and_its_kind` |
+
+Two of the fixes change what a consumer sees, and the changelog says so:
+`split` no longer merges a longer name's pages (*Fixed*), and `--ledger`
+with a path that is not a file exits 1 (*Added*, with the option).
+
+Conscious no-ops:
+
+- `doctor` parses `coverage.csv` and the hits files itself. The package's
+  readers name no file or line, which a check has to.
+- `TIMELINE_KEYS` and `CHECK_READS` are read only by tests, which pin them
+  against the writer's output and the reference document.
+- `senders.is_inbound` and `lookup.direction` answer different questions.
+- A malformed `receivedDateTime` raises in `senders` as in every other
+  reader, and `doctor` is what reports it.
+- `check` on a timeline file that is not a JSON object raises as it did
+  before this plan.
+- The README names the package index first, which is right for the release
+  that carries it.
+- `check` tests whether the stored message exists more than once per row.
+
+Gate after the fixes: `ruff check`, `ruff format --check`, `pyrefly check`,
+and `pytest` (345 passed).
+
+## Retrospective
+
+- **The plan's order held.** Every item landed in the step the plan gave
+  it, and the one addition, `coverage --ledger`, came from following item E
+  to its end: a line that a session passes on as printed has to be computed
+  from the ledger the repo actually keeps.
+- **A new command can make an old pattern dangerous.** The page-file glob
+  was in `split` before this plan, where a wrong match added pages to a
+  merge that the term filter then narrowed. Sharing it with `lookup-reset`
+  turned the same match into moved files. Extracting a helper is the moment to ask what its
+  new caller does with a wrong answer.
+- **"Reports, never crashes" needs its own tests.** Most of what the review
+  found was in `doctor` and `import`: commands whose promise is one line
+  per problem. Their tests covered the malformed inputs the author thought
+  of, and the handlers caught the exceptions those raise. Inputs of the
+  wrong shape (a list for an object, a null for a string) raise others.
+- **A printed value that is acted on needs a loud failure.** `next sweep
+  from` moved arithmetic out of the session, which is the gain, but it also
+  made two silent fallbacks (a mistyped ledger path, an empty ledger)
+  decide where a sweep starts. Both now stop and say so.
+- **Pinning the interface paid for itself in the review.** With command
+  names, step names, settings, and the public names under test, the review
+  could spend its time on behavior, and the fixes to it could not move the
+  interface without a test saying so.
+- **Next time, run the review's edge-case pass before the README.** Two
+  fixes changed sentences the README and the changelog had already
+  settled.

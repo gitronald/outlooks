@@ -6,6 +6,12 @@ named by `profile` in `[tool.outlooks]` so `{cli} config` prints its path.
 Every mode reads it at its "Repo profile" step, before classifying,
 resolving names, cross-checking, or filing.
 
+When the profile, or a skill of the repo's own, refers to a step of this
+skill, cite the step by its name, not its number: "run the sweep's `sweep`
+step, then its `classify` and `match` steps". Every step's name is given
+where the step starts, as step `name`, and it stays the same when steps are
+added or renumbered. A number does not.
+
 Write it against the seven headings below, in this order. Each heading lists
 what the profile must answer. Say "none" where a heading does not apply
 (a repo that never files anything has no filing step), so an agent can tell
@@ -20,7 +26,11 @@ belongs.
 - The own addresses, and why each counts as *us* (an old address still
   receiving replies, a sibling mailbox the team sends from).
 - The system senders and what each one sends (a web form, a
-  ticketing system, a billing service). For each, the notification types
+  ticketing system, a billing service). `{cli} senders` is how to find
+  them: it counts the archived inbound mail by sender and marks each
+  address `own`, `system`, or `unlisted`, and a frequent `unlisted` address
+  that no person writes from is a notifier missing from `system_senders`.
+  Until it is listed, its mail is classified as a person's. For each, the notification types
   it sends, what can be parsed from each (a title, an id, a person's name
   and address), and which of them identify a party who must stay
   confidential (`{cli} doc queries`, B3, shows the shape).
@@ -81,7 +91,7 @@ belongs.
   who adds its rows to `mass-sends.csv` in `archive_dir`, so a full read of
   a range reads one copy of each (`{cli} skill window`).
 - Where the repo keeps per-record mailbox history, if it does: the file, its
-  columns and vocabulary, and the rules for a row (the lookup's step 5
+  columns and vocabulary, and the rules for a row (the lookup's `keep` step
   offers rows in this shape).
 
 ## 7. Transcription

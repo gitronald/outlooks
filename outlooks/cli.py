@@ -1,11 +1,13 @@
 """``outlooks`` — the Outlook mailbox archive and the skill that drives it.
 
     outlooks import [<capture-dir-or-file> ...] [--replace]
-    outlooks coverage [--since YYYY-MM-DD]
+    outlooks coverage [--since YYYY-MM-DD] [--ledger <ledger.csv>]
+    outlooks senders [--since YYYY-MM-DD]
     outlooks save <message.json> [--text <attachment.txt>] | <hits.json> --hits
     outlooks render <message.json> --out <dir> [--text <att.txt>]
     outlooks split <name> --match <term> [--since] [--batches <dir>]
     outlooks check <name>
+    outlooks lookup-reset <name>
     outlooks worklist --after YYYY-MM-DD --before YYYY-MM-DD --out <dir>
     outlooks totals [<prefix> ...] | --check AFTER BEFORE
     outlooks audit <prefix> [--sweep <file>]
@@ -13,11 +15,15 @@
     outlooks hash <internetMessageId>
     outlooks hook [--apply]
     outlooks config
+    outlooks doctor
     outlooks skill | doc | install    (from pkgskills)
 
 Each command imports its working module inside the body, so ``--help`` and any
 single command stay cheap. Every setting comes from ``[tool.outlooks]``
 (``outlooks config``).
+
+Internal: not part of the Python API a consuming repo may import (the
+README's "Python API" lists what is). The CLI is this module's interface.
 """
 
 from __future__ import annotations
@@ -37,6 +43,9 @@ app = typer.Typer(
     help="Archive and read an Outlook mailbox through the Microsoft 365 connector.",
     no_args_is_help=True,
 )
+
+# How many differing fields a DIFFERS line names before it counts the rest.
+DIFFERS_SHOWN = 5
 
 
 def _fail(message: object) -> typer.Exit:
@@ -93,8 +102,12 @@ def import_(
     )
     for path in done.messages_replaced:
         typer.echo(f"  REPLACED message from {path}")
-    for path in done.messages_differ:
-        typer.echo(f"  DIFFERS from the stored copy (--replace rewrites): {path}")
+    for path, fields in done.messages_differ:
+        shown = ", ".join(fields[:DIFFERS_SHOWN])
+        if len(fields) > DIFFERS_SHOWN:
+            shown += f" (+{len(fields) - DIFFERS_SHOWN} more)"
+        where = f" in {shown}" if shown else ""
+        typer.echo(f"  DIFFERS from the stored copy{where}: {path}")
     typer.echo(f"attachment texts: {done.attachments_written} written")
     for path in done.attachments_unmatched:
         typer.echo(f"  UNMATCHED attachment read (its message not read): {path}")
@@ -143,6 +156,10 @@ def coverage(
         str | None,
         typer.Option(help="Report gaps from this date (default: the first row)."),
     ] = None,
+    ledger: Annotated[
+        Path | None,
+        typer.Option(help="The sweep's ledger (default: ledger.csv in archive_dir)."),
+    ] = None,
 ) -> None:
     """Report which windows the archive holds completely, and the gaps (read-only)."""
     from datetime import datetime
@@ -157,17 +174,52 @@ def coverage(
             start = datetime.fromisoformat(since).replace(tzinfo=config.zone())
         except ValueError:
             raise _fail(f"{since!r} is not a YYYY-MM-DD date") from None
+    if ledger is not None and not ledger.is_file():
+        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
     hits = store.load_hits()
     lines = cv.report(
         box,
         cv.read_rows(),
         hits,
         set(store.load_messages()),
-        cv.read_rows(cv.ledger_csv()),
+        cv.read_rows(ledger or cv.ledger_csv()),
         since=start,
         skipped=cv.mass_copies(hits, cv.read_rows(cv.mass_sends_csv())),
     )
     typer.echo("\n".join(lines))
+
+
+@app.command()
+def senders(
+    mailbox: Annotated[str | None, typer.Option(help="Mailbox to report.")] = None,
+    since: Annotated[
+        str | None,
+        typer.Option(help="Count hits received on or after YYYY-MM-DD."),
+    ] = None,
+) -> None:
+    """Count the inbound hits by sender; mark each own, system, or unlisted."""
+    from datetime import date
+
+    from outlooks import senders as sd
+
+    box = _mailbox(mailbox)
+    start = None
+    if since:
+        try:
+            start = date.fromisoformat(since)
+        except ValueError:
+            raise _fail(f"{since!r} is not a YYYY-MM-DD date") from None
+    found = sd.senders(box, start)
+    scope = f" since {start.isoformat()}" if start else ""
+    total = sum(s.count for s in found)
+    typer.echo(f"senders for {box}{scope}: {total} inbound hits")
+    for s in found:
+        typer.echo(f"{s.count:6}  {s.mark:8}  {s.address or '(no sender)'}")
+    unlisted = sum(1 for s in found if s.mark == "unlisted")
+    typer.echo(
+        f"{unlisted} unlisted; an address that is a notifier, not a person, "
+        "belongs in system_senders"
+    )
 
 
 @app.command()
@@ -301,7 +353,7 @@ def split(
 def check(
     name: Annotated[str, typer.Argument(help="The lookup's name.")],
 ) -> None:
-    """Check a lookup's timeline files against the archive; exit 1 on any mismatch."""
+    """Check a lookup's timeline files against the archive; exit 1 on any finding."""
     from outlooks import config, lookup
 
     rows = lookup.check(name)
@@ -312,9 +364,27 @@ def check(
             f"{r.nn} {r.received or '-'} {r.day or '-'} {'ok' if r.ok else 'BAD'} "
             f"{r.direction:3}{system} txt={r.texts} {r.subject[:60]}"
         )
+        if r.finding:
+            typer.echo(f"   {r.finding}")
     if not rows:
         typer.echo(f"no {name}-NN.timeline.json files in {config.scratch_dir()}")
     raise typer.Exit(0 if rows and all(r.ok for r in rows) else 1)
+
+
+@app.command("lookup-reset")
+def lookup_reset(
+    name: Annotated[str, typer.Argument(help="The lookup's name.")],
+) -> None:
+    """Move a lookup's page and timeline files aside before a repeat lookup."""
+    from outlooks import config, lookup
+
+    folder, moved = lookup.reset(name)
+    for path in moved:
+        typer.echo(f"moved {path}")
+    if moved:
+        typer.echo(f"{len(moved)} files of {name} moved to {folder}")
+    else:
+        typer.echo(f"no files of {name} in {config.scratch_dir()}")
 
 
 @app.command()
@@ -471,6 +541,19 @@ def config_() -> None:
     typer.echo(f"table: {s.source or '(none: defaults)'}")
     for key, value, origin in config.describe():
         typer.echo(f"{key:15} {value}  [{origin}]")
+
+
+@app.command()
+def doctor() -> None:
+    """Check that this repo is wired correctly (read-only); exit 1 on any failure."""
+    from outlooks import doctor as dr
+
+    results = dr.run()
+    for r in results:
+        typer.echo(f"{r.check:20} {'ok' if r.ok else 'FAIL':5} {r.note}")
+    failed = sum(1 for r in results if not r.ok)
+    typer.echo(f"{len(results)} checks, {failed} failed")
+    raise typer.Exit(1 if failed else 0)
 
 
 windows_app = typer.Typer(

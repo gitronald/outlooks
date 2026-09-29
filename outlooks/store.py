@@ -26,6 +26,19 @@ from urllib.parse import parse_qs, urlparse
 
 from outlooks import config
 
+# The names a consuming repo may import; a change to one is a changelog
+# entry. The write paths (``save_*``, ``replace_*``) are not: a repo fills the
+# archive through ``outlooks import``, never by calling the store.
+__all__ = [
+    "StoreError",
+    "archive_root",
+    "id_hash",
+    "load_hits",
+    "load_messages",
+    "newest_hit",
+    "stable",
+]
+
 # Fields that change between reads of an unchanged message. `offset` is the
 # hit's position in the page it came from.
 VOLATILE = ("isRead", "flag", "categories", "parentFolderId", "offset")
