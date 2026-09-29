@@ -128,7 +128,9 @@ its recipients. Mail from one of `notice_senders` is a notice to us (`in`)
 whoever it is addressed to: a bounce names the address that failed, not
 ours. An entry of either list is an address, or a pattern in which `*`
 stands for any run of characters, for a sender that writes from many
-addresses. An address that both lists match is a notice sender.
+addresses. An address belongs to one list: one of `own_addresses` is ours
+whatever a pattern matches, and an address that both sender lists match is
+a notice sender.
 
 `uv run outlooks config` prints the effective values and where each came from.
 The `profile` is repo-owned prose the skill reads for what this package cannot
@@ -193,7 +195,7 @@ so one repair never rewrites anything else that differs.
 |---|---|
 | `outlooks import [paths] [--replace]` | file the hook's captures; record complete windows |
 | `outlooks coverage [--since] [--ledger]` | covered windows, gaps, unread counts, ledger lag, and the next sweep's start |
-| `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, `notice`, or `unlisted` |
+| `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, `notice`, or `unlisted` (`none` for the hits with no sender) |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |
 | `outlooks lookup-reset <name>` | move a lookup's page and timeline files aside before a repeat lookup |
@@ -270,8 +272,9 @@ A `followup` carries `extra["auto"]`, true for an automatic reply.
 `is_auto_reply(subject)` is the same test for a repo that has only the
 subject in hand. A `system` message from one of `notice_senders` carries
 `extra["notice"]`, true. `config.is_system_sender(address)` and
-`config.is_notice_sender(address)` say which list an address is in,
+`config.is_notice_sender(address)` say which kind of sender an address is,
 patterns included, which `address in settings().system_senders` does not.
+At most one of them is true of an address, and neither of an own address.
 
 `Mail` carries what such a wrapper reads: `sender`, `recipients`, `subject`,
 and `text` (the body as plain text for a message read in full, the summary

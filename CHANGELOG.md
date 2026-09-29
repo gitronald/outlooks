@@ -35,13 +35,16 @@ what a consuming repo has to do about it:
   where mail from one of `system_senders` is `out` unless it is addressed
   to us. `classify` gives it the `system` role with `extra["notice"]` true,
   `outlooks senders` marks its addresses `notice`, and a lookup pairs
-  nothing with it. An address both lists match is a notice sender.
+  nothing with it. An address both lists match is a notice sender, in a
+  lookup's pairing as everywhere else.
 - An entry of `system_senders` or `notice_senders` may be a pattern in
   which `*` stands for any run of characters (`postmaster@*`,
   `*@bounces.example.net`), for a sender that writes from many addresses.
   An entry without `*` matches as before.
 - `config.is_system_sender(address)` and `config.is_notice_sender(address)`
-  say whether an address is one of each list, patterns included.
+  say whether an address is a sender of each kind, patterns included. An
+  address is of one kind at most: one of `own_addresses` is neither, and
+  one both lists match is a notice sender only.
 
 ### Changed
 
@@ -53,6 +56,12 @@ what a consuming repo has to do about it:
 - A repo that tests `address in settings().system_senders` keeps working
   while every entry is an address. Once an entry is a pattern it calls
   `config.is_system_sender(address)`.
+- Mail from one of `own_addresses` is ours even when `system_senders` lists
+  the address too. `classify` gave it the `system` role, where a lookup's
+  `direction` and `outlooks senders` already read it as ours, and now gives
+  it `ours` or `decision`. A lookup's timeline key `system` is false for
+  it, and was true. A repo that lists one of its own addresses in
+  `system_senders` computes its stored roles again.
 - A lookup's timeline key `system` is true for a sender in either list. It
   was true for one of `system_senders` only, and is unchanged for a repo
   that sets no `notice_senders`.
@@ -65,9 +74,12 @@ what a consuming repo has to do about it:
   a subject that reads as automatic always reads as a reply. `Auto-reply`,
   `Auto reply`, `Autoreply`, `Auto-response`, and `Out of the office` are
   recognized beside `Automatic reply`, `Automatic response`, and `Out of
-  office`, and the colon after the phrase is optional (a dash, or nothing,
-  also ends it). Such a message was an `arrival` and is now a `followup`
-  with `extra["auto"]` true, `is_reply` is true of its subject, and
+  office`. A colon ends the phrase, as does a run of dashes with a space
+  after it (`Auto Reply - ...`), or the end of the subject. Words after the
+  bare phrase do not: `Out of office coverage schedule` is a person's
+  subject and stays an `arrival`. A message with one of the newly
+  recognized subjects was an `arrival` and is now a `followup` with
+  `extra["auto"]` true, `is_reply` is true of its subject, and
   `thread_subject` drops the phrase. An `[External]` tag ahead of the phrase
   no longer hides it: `extra["auto"]` was false there and is now true. A
   repo that stored roles or thread subjects computed by an earlier release
