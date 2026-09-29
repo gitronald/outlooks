@@ -367,3 +367,11 @@ item the earlier entry left unverified is settled.
 `PUBLISH_ENABLED` stays unset until the release that carries this plan is
 cut. Step 10 is then one command, run before the tag is pushed:
 `gh variable set PUBLISH_ENABLED --body true`.
+
+### 2026-09-29: publishing enabled
+
+Logged 2026-09-29T02:28:28-07:00. The maintainer asked for the variable to be
+set now, ahead of the release, which supersedes the entry above.
+`PUBLISH_ENABLED` is `true` on the repository, so step 10 is done. Nothing
+was uploaded: the workflow runs on a `v*` tag push, and none has been pushed
+since. The next one is the first upload.
