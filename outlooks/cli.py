@@ -528,15 +528,19 @@ def hook(
     from outlooks import hook as hk
 
     root = find_repo_root(Path.cwd())
-    if apply:
-        done = hk.apply(root, force=force, start=Path.cwd())
-        for line in done or ["nothing to do"]:
-            typer.echo(line)
-    now = hk.status(root, Path.cwd())
+    try:
+        if apply:
+            done = hk.apply(root, force=force, start=Path.cwd())
+            for line in done or ["nothing to do"]:
+                typer.echo(line)
+        now = hk.status(root, Path.cwd())
+    except ValueError as e:
+        typer.echo(f"settings do not parse: {e}", err=True)
+        raise typer.Exit(1) from None
     typer.echo(f"script    {now.script:8} {hk.SCRIPT_PATH}")
     typer.echo(f"settings  {now.settings:8} {hk.SETTINGS_PATH}")
-    for d in now.duplicates:
-        typer.echo(f"settings  {'duplicate':8} {d.file}: remove {d.entry}")
+    for line in dict.fromkeys(f"{d.file}: {d.removal}" for d in now.duplicates):
+        typer.echo(f"settings  {'duplicate':8} {line}")
     if now.advice:
         typer.echo(now.advice)
     raise typer.Exit(0 if now.ok else 1)

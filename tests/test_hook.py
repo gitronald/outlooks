@@ -349,3 +349,41 @@ def test_local_settings_of_another_shape_are_named(tmp_path):
     with pytest.raises(ValueError, match=r"settings\.local\.json: `hooks`"):
         hk.status(tmp_path)
     assert hk.apply(tmp_path) == []
+
+
+@pytest.mark.parametrize("matcher", [None, "", "*"])
+def test_a_catch_all_hook_that_does_not_write_captures_is_ok(tmp_path, matcher):
+    hk.apply(tmp_path)
+    entry = {"hooks": [{"type": "command", "command": "notify-send done"}]}
+    if matcher is not None:
+        entry["matcher"] = matcher
+    _write(hk.user_settings(), {"hooks": {"PostToolUse": [entry]}})
+    assert hk.status(tmp_path).ok
+
+
+def test_a_duplicate_beside_the_script_in_one_entry_is_named_alone(tmp_path):
+    hk.apply(tmp_path)
+    path = tmp_path / hk.SETTINGS_PATH
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    [entry] = settings["hooks"]["PostToolUse"]
+    entry["hooks"].append(INLINE["hooks"][0])
+    path.write_text(json.dumps(settings), encoding="utf-8")
+    [dup] = hk.status(tmp_path).duplicates
+    assert not dup.whole
+    assert json.loads(dup.entry) == entry
+    assert dup.removal.startswith(f"remove the hook running `{dup.command}` from ")
+
+
+def test_cli_hook_reports_settings_that_do_not_parse(tmp_path):
+    from typer.testing import CliRunner
+
+    from outlooks.cli import app
+
+    (tmp_path / ".git").mkdir()
+    hk.apply(tmp_path)
+    _write(hk.user_settings(), {"hooks": []})
+    for args in (["hook"], ["hook", "--apply"]):
+        result = CliRunner().invoke(app, args)
+        assert result.exit_code == 1, result.output
+        assert "settings do not parse: " in result.output
+        assert "Traceback" not in result.output

@@ -143,14 +143,16 @@ class Duplicate:
     """Another PostToolUse hook that runs on a connector call."""
 
     file: str  # the settings file that holds it, as shown to the operator
-    matcher: str
     command: str
+    entry: str  # its entry in ``file``'s ``hooks.PostToolUse``, as JSON
+    whole: bool  # every hook in the entry is a duplicate: remove the entry
 
     @property
-    def entry(self) -> str:
-        """The entry as it would sit in ``file``'s ``hooks.PostToolUse``."""
-        hooks = [{"type": "command", "command": self.command}]
-        return json.dumps({"matcher": self.matcher, "hooks": hooks})
+    def removal(self) -> str:
+        """What to remove from ``file``, for the operator."""
+        if self.whole:
+            return f"remove {self.entry}"
+        return f"remove the hook running `{self.command}` from {self.entry}"
 
 
 @dataclass(frozen=True)
@@ -229,14 +231,21 @@ def _wired(settings: dict[str, Any]) -> bool:
     return bool(_wiring(settings))
 
 
+# Matchers that run their hooks on every tool: a hook under one is there for
+# every call (a logger, a notifier), so it is a duplicate only when its command
+# writes to the captures directory.
+CATCH_ALL = (None, "", "*")
+
+
 def _covers(matcher: Any) -> bool:
     """Whether a PostToolUse matcher runs its hooks on either connector tool.
 
-    As Claude Code reads one: none, ``""``, or ``*`` matches every tool, a
-    matcher of plain names separated by ``|`` matches those names exactly, and
-    any other is a regular expression searched for in the tool's name.
+    As Claude Code reads one: none, ``""``, or ``*`` matches every tool (see
+    :data:`CATCH_ALL`), a matcher of plain names separated by ``|`` matches
+    those names exactly, and any other is a regular expression searched for in
+    the tool's name.
     """
-    if matcher in (None, "", "*"):
+    if matcher in CATCH_ALL:
         return True
     if not isinstance(matcher, str):
         return False
@@ -257,13 +266,15 @@ def user_settings() -> Path:
 def duplicates(root: Path) -> tuple[Duplicate, ...]:
     """Every other PostToolUse hook that runs on a connector call.
 
-    The project, local, and user settings are read; a hook covering either
-    connector tool is a duplicate unless its command is one that wires the
-    capture script in ``.claude/settings.json``. Claude Code runs an identical
-    command once however many files list it, so that one is not.
+    The project, local, and user settings are read; a hook whose matcher names
+    either connector tool, or a catch-all hook whose command names the captures
+    directory, is a duplicate unless its command is one that wires the capture
+    script in ``.claude/settings.json``. Claude Code runs an identical command
+    once however many files list it, so that one is not.
     ``ValueError`` when a settings file does not parse.
     """
     wired = set(_wiring(_read_settings(root)))
+    folder = config.captured_dir().name
     files = (
         (str(SETTINGS_PATH), root / SETTINGS_PATH),
         (str(LOCAL_PATH), root / LOCAL_PATH),
@@ -279,11 +290,14 @@ def duplicates(root: Path) -> tuple[Duplicate, ...]:
             matcher = entry.get("matcher")
             if not _covers(matcher):
                 continue
-            found += [
-                Duplicate(shown, matcher or "", command)
-                for command in _commands(entry)
-                if command not in wired
+            commands = _commands(entry)
+            extra = [
+                c
+                for c in commands
+                if c not in wired and (matcher not in CATCH_ALL or folder in c)
             ]
+            whole = len(extra) == len(entry.get("hooks") or [])
+            found += [Duplicate(shown, c, json.dumps(entry), whole) for c in extra]
     return tuple(found)
 
 
