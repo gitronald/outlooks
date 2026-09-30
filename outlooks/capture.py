@@ -301,24 +301,33 @@ def import_captures(
     """Put every capture from ``mailbox`` (default: the configured one) in the archive.
 
     Search hits go to tier 1 and reads to tier 2, through the store's write-once
-    saves, so re-importing the same captures is a no-op. A capture of a call an
-    earlier one already captured (the same ``tool_use_id``) is skipped and listed
-    in ``duplicates``. A read that differs from the stored message is listed in
-    ``messages_differ`` with the fields that differ; with ``replace`` it, and
-    any stored hit that differs from a capture of the same copy, is rewritten
-    from the capture instead (the one-time repair of model-typed files).
+    saves, so re-importing the same captures is a no-op. Of the captures of one
+    call (the same ``tool_use_id``), the first that kept its output is imported
+    and the rest are skipped and listed in ``duplicates``. A read that differs
+    from the stored message is listed in ``messages_differ`` with the fields
+    that differ; with ``replace`` it, and any stored hit that differs from a
+    capture of the same copy, is rewritten from the capture instead (the
+    one-time repair of model-typed files).
     """
     mailbox = (mailbox or config.mailbox()).lower()
     done = Imported()
-    calls: set[str] = set()
-    distinct: list[Capture] = []
+    # One capture per call: the first that kept its output, else the first. A
+    # second hook may not keep a spilled result's copy, so its capture of a
+    # call can be lost where the script's is not.
+    kept: dict[str, Capture] = {}
     for c in captures:
-        if c.tool_use_id in calls:
-            done.duplicates.append(c.path)
-            continue
         if c.tool_use_id is not None:
-            calls.add(c.tool_use_id)
-        distinct.append(c)
+            first = kept.setdefault(c.tool_use_id, c)
+            if first.lost and not c.lost:
+                kept[c.tool_use_id] = c
+    distinct = [
+        c for c in captures if c.tool_use_id is None or kept[c.tool_use_id] is c
+    ]
+    done.duplicates = [
+        c.path
+        for c in captures
+        if c.tool_use_id is not None and kept[c.tool_use_id] is not c
+    ]
     captures = distinct
     ours = [c for c in captures if c.is_of(mailbox)]
     done.other_mailbox = len(captures) - len(ours)

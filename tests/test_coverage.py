@@ -226,6 +226,39 @@ def test_two_captures_of_one_call_import_once(tmp_path):
     assert "  1 DUPLICATE captures of a call already captured" in result.output
 
 
+def test_of_two_captures_of_one_call_the_one_that_kept_its_output_imports(
+    tmp_path,
+):
+    # A second hook kept no copy of a spilled result: its capture, first in
+    # order, is lost, and the script's is imported in its place.
+    folder = config.captured_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    note = "Output has been saved to /nowhere/read_resource-1.txt."
+    lost = folder / "20260913T100000-1.json"
+    lost.write_text(
+        json.dumps(
+            {
+                "tool_name": SEARCH,
+                "tool_input": window_args(0),
+                "tool_response": note,
+                "tool_use_id": "toolu_1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    good = write_capture(
+        folder, "20260913T100001", SEARCH, window_args(0), hit(1), trailer(1)
+    )
+    data = json.loads(good.read_text(encoding="utf-8"))
+    good.write_text(json.dumps({**data, "tool_use_id": "toolu_1"}), "utf-8")
+    captures, _ = cp.load_captures([folder])
+
+    done = cp.import_captures(captures)
+    assert done.duplicates == [lost]
+    assert done.lost == []
+    assert done.hits_added == 1
+
+
 def test_save_hits_knows_a_message_filed_under_another_month(tmp_path):
     store.save_hits([hit(1, received="2025-03-10T12:00:00.000Z")], BOX, root=tmp_path)
     counts = store.save_hits([hit(1)], BOX, root=tmp_path)
