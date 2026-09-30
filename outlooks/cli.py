@@ -529,6 +529,8 @@ def hook(
     now = hk.status(root, Path.cwd())
     typer.echo(f"script    {now.script:8} {hk.SCRIPT_PATH}")
     typer.echo(f"settings  {now.settings:8} {hk.SETTINGS_PATH}")
+    for d in now.duplicates:
+        typer.echo(f"settings  {'duplicate':8} {d.file}: remove {d.entry}")
     if now.advice:
         typer.echo(now.advice)
     raise typer.Exit(0 if now.ok else 1)

@@ -234,6 +234,19 @@ def test_hook_settings_entry_is_checked_when_the_settings_do_not_load(repo):
     assert "no PostToolUse entry" in failed(dr.run())["hook settings entry"]
 
 
+def test_hook_settings_entry_fails_on_a_duplicate_capture_hook(repo):
+    inline = {
+        "matcher": hk.MATCHER,
+        "hooks": [{"type": "command", "command": "cat > captured/x.json"}],
+    }
+    local = repo / hk.LOCAL_PATH
+    local.write_text(json.dumps({"hooks": {"PostToolUse": [inline]}}), "utf-8")
+    note = failed(dr.run())["hook settings entry"]
+    assert note.startswith(f"duplicate: {hk.LOCAL_PATH} runs `cat > captured/x.json`")
+    local.write_text(json.dumps({"permissions": {"allow": []}}), "utf-8")
+    assert failed(dr.run()) == {}
+
+
 def test_skill_stub_fails_when_missing_or_edited(repo):
     [stub] = (repo / ".claude" / "skills").rglob("SKILL.md")
     stub.write_text(stub.read_text(encoding="utf-8") + "\nedited\n", encoding="utf-8")

@@ -236,3 +236,116 @@ def test_apply_refuses_settings_of_another_shape_and_leaves_them(tmp_path, setti
         hk.apply(tmp_path)
     assert path.read_text(encoding="utf-8") == settings
     assert not (tmp_path / hk.SCRIPT_PATH).exists()
+
+
+INLINE = {
+    "matcher": "mcp__claude_ai_Microsoft_365__(outlook_email_search|read_resource)",
+    "hooks": [
+        {"type": "command", "command": "cat > captured/$(date +%s)-$$.json"},
+    ],
+}
+
+
+def _write(path, settings):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(settings), encoding="utf-8")
+
+
+def test_an_inline_capture_hook_in_the_local_settings_is_a_duplicate(tmp_path):
+    hk.apply(tmp_path)
+    _write(tmp_path / hk.LOCAL_PATH, {"hooks": {"PostToolUse": [INLINE]}})
+
+    status = hk.status(tmp_path)
+    assert (status.script, status.settings) == ("ok", "ok")
+    [dup] = status.duplicates
+    assert dup.file == str(hk.LOCAL_PATH)
+    assert dup.command == INLINE["hooks"][0]["command"]
+    assert json.loads(dup.entry) == INLINE
+    assert not status.ok
+    assert "by hand" in status.advice
+
+    # --apply leaves the operator's file alone.
+    before = (tmp_path / hk.LOCAL_PATH).read_bytes()
+    assert hk.apply(tmp_path) == []
+    assert (tmp_path / hk.LOCAL_PATH).read_bytes() == before
+
+
+def test_unrelated_local_hooks_and_permissions_are_ok(tmp_path):
+    hk.apply(tmp_path)
+    other = {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "x"}]}
+    _write(
+        tmp_path / hk.LOCAL_PATH,
+        {
+            "permissions": {"allow": ["mcp__claude_ai_Microsoft_365__read_resource"]},
+            "hooks": {"PostToolUse": [other], "Stop": [INLINE]},
+        },
+    )
+    assert hk.status(tmp_path).ok
+
+
+def test_the_capture_script_listed_again_elsewhere_is_ok(tmp_path):
+    # Claude Code runs an identical command once, whichever files list it.
+    hk.apply(tmp_path)
+    wired = {
+        "matcher": hk.MATCHER,
+        "hooks": [{"type": "command", "command": hk.COMMAND}],
+    }
+    _write(hk.user_settings(), {"hooks": {"PostToolUse": [wired]}})
+    assert hk.status(tmp_path).ok
+
+
+@pytest.mark.parametrize(
+    "matcher",
+    [None, "", "*", "mcp__claude_ai_Microsoft_365__read_resource|Bash", "mcp__.*"],
+)
+def test_a_user_level_hook_whose_matcher_covers_a_connector_tool_is_a_duplicate(
+    tmp_path, matcher
+):
+    hk.apply(tmp_path)
+    entry = {"hooks": INLINE["hooks"]}
+    if matcher is not None:
+        entry["matcher"] = matcher
+    _write(hk.user_settings(), {"hooks": {"PostToolUse": [entry]}})
+    [dup] = hk.status(tmp_path).duplicates
+    assert dup.file == str(hk.user_settings())
+
+
+def test_a_second_hook_in_the_project_settings_is_a_duplicate(tmp_path):
+    hk.apply(tmp_path)
+    path = tmp_path / hk.SETTINGS_PATH
+    settings = json.loads(path.read_text(encoding="utf-8"))
+    settings["hooks"]["PostToolUse"].append(INLINE)
+    path.write_text(json.dumps(settings), encoding="utf-8")
+    [dup] = hk.status(tmp_path).duplicates
+    assert dup.file == str(hk.SETTINGS_PATH)
+
+
+def test_cli_hook_names_the_duplicate_and_exits_nonzero(tmp_path):
+    from typer.testing import CliRunner
+
+    from outlooks.cli import app
+
+    (tmp_path / ".git").mkdir()
+    hk.apply(tmp_path)
+    _write(tmp_path / hk.LOCAL_PATH, {"hooks": {"PostToolUse": [INLINE]}})
+    for args in (["hook"], ["hook", "--apply"]):
+        result = CliRunner().invoke(app, args)
+        assert result.exit_code == 1, result.output
+        line = f"settings  duplicate {hk.LOCAL_PATH}: remove {json.dumps(INLINE)}"
+        assert line in result.output.splitlines()
+
+
+@pytest.mark.parametrize("matcher", ["(", 7, "Bash"])
+def test_a_matcher_that_covers_no_connector_tool_is_ok(tmp_path, matcher):
+    hk.apply(tmp_path)
+    entry = {"matcher": matcher, "hooks": INLINE["hooks"]}
+    _write(tmp_path / hk.LOCAL_PATH, {"hooks": {"PostToolUse": [entry]}})
+    assert hk.status(tmp_path).ok
+
+
+def test_local_settings_of_another_shape_are_named(tmp_path):
+    hk.apply(tmp_path)
+    _write(tmp_path / hk.LOCAL_PATH, {"hooks": []})
+    with pytest.raises(ValueError, match=r"settings\.local\.json: `hooks`"):
+        hk.status(tmp_path)
+    assert hk.apply(tmp_path) == []
