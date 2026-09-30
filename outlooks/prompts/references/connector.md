@@ -54,6 +54,10 @@ tooling reads nothing else. Run it first; the names below refer to its keys.
   large for the context reaches the hook as a note naming the file Claude
   Code saved it to; the hook copies that file beside the capture as
   `{same name}.saved.txt`, so the capture survives the original's cleanup.
+  Wire no other hook on those two tools, in any settings file, local or
+  user-level included: Claude Code runs every one, so each call is captured
+  twice. `{cli} hook` names such a hook as `duplicate`, and `{cli} import`
+  skips the second capture of a call and counts it.
 - **Scratch:** `scratch_dir` (gitignored) for renders, page files, timeline
   files, and worklists; don't commit them.
 - **Zone:** `timezone`. Every date shown to the operator is in this zone.
