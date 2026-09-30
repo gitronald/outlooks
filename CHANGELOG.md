@@ -23,6 +23,29 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
+### Added
+
+- `outlooks import` imports one capture per call (the same `tool_use_id`),
+  the first that kept its output, and prints how many it skipped
+  (`N DUPLICATE captures of a call already captured`), so a call captured
+  by two hooks is filed, counted, and reported once.
+
+### Changed
+
+- `outlooks hook` and `outlooks doctor` read `.claude/settings.local.json`
+  and the user's own `settings.json` as well as `.claude/settings.json`,
+  and report any other PostToolUse hook whose matcher names
+  `outlook_email_search` or `read_resource` (or a catch-all hook whose
+  command names the captures directory) as `duplicate`, naming its file:
+  Claude Code runs every matching hook, so a leftover inline capture hook
+  captures each call twice. Either command exits 1 on one, as for
+  `differs`, and `outlooks hook` exits 1 with a message, not a traceback,
+  on a settings file that does not parse. A repo whose CI
+  runs `outlooks doctor` removes the entry the command prints;
+  `outlooks hook --apply` does not edit those files.
+
 ## [0.3.0] - 2026-09-29
 
 ### Added

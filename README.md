@@ -67,7 +67,10 @@ choice.
 
 `outlooks doctor` makes no connector call, so CI can run it. It checks what
 the repo commits: the `[tool.outlooks]` table, the profile, the archive, and,
-under `.claude/`, the hook script, `settings.json`, and the skill stub.
+under `.claude/`, the hook script, `settings.json`, and the skill stub. Run
+locally, it also reads `.claude/settings.local.json` and the user's own
+`settings.json`, and fails on any other hook there that captures the
+connector tools, since Claude Code runs every one.
 
 ```yaml
 - run: uv sync --frozen

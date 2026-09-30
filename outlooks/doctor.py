@@ -141,6 +141,15 @@ def _hook_settings(root: Path) -> str:
             f"{hook.SETTINGS_PATH} has no PostToolUse entry running "
             f"{hook.SCRIPT_PATH.name}; run `uv run outlooks hook --apply`"
         )
+    try:
+        found = hook.duplicates(root)
+    except ValueError as e:
+        raise _Failed(f"does not parse: {e}") from None
+    if found:
+        listed = "; ".join(f"{d.file} runs `{d.command}`" for d in found)
+        raise _Failed(
+            f"duplicate: {listed}, on the connector tools too; {hook.DUPLICATE_ADVICE}"
+        )
     return str(hook.SETTINGS_PATH)
 
 

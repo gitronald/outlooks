@@ -6,6 +6,13 @@ to the captures directory by a shell script Claude Code runs after the call;
 has the script and the ``.claude/settings.json`` entry that runs it, and
 :func:`apply` writes whichever is missing, never touching other hooks.
 
+Claude Code runs every hook whose matcher covers a call, from the project's
+settings, its ``settings.local.json``, and the user's own settings alike, so a
+second hook for the connector tools in any of them (an inline ``cat >`` from
+before the script, say) captures each call twice. :func:`status` lists those as
+``duplicates``; :func:`apply` never edits them: the local and user files are the
+operator's, and another hook in the project file is left as every other is.
+
 The script is written for the repo's ``captured_dir`` (:func:`script`), so the
 hook writes where ``outlooks import`` reads; one written for another directory,
 or by an earlier build, is ``stale``.
@@ -19,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +36,11 @@ from outlooks import config
 
 SCRIPT_PATH = Path(".claude/hooks/outlook-capture.sh")
 SETTINGS_PATH = Path(".claude/settings.json")
+LOCAL_PATH = Path(".claude/settings.local.json")
+TOOLS = (
+    "mcp__claude_ai_Microsoft_365__outlook_email_search",
+    "mcp__claude_ai_Microsoft_365__read_resource",
+)
 MATCHER = "mcp__claude_ai_Microsoft_365__(read_resource|outlook_email_search)"
 COMMAND = '"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/outlook-capture.sh"'
 
@@ -126,15 +139,33 @@ def _script_state(text: str, root: Path, start: Path | None) -> str:
 
 
 @dataclass(frozen=True)
+class Duplicate:
+    """Another PostToolUse hook that runs on a connector call."""
+
+    file: str  # the settings file that holds it, as shown to the operator
+    command: str
+    entry: str  # its entry in ``file``'s ``hooks.PostToolUse``, as JSON
+    whole: bool  # every hook in the entry is a duplicate: remove the entry
+
+    @property
+    def removal(self) -> str:
+        """What to remove from ``file``, for the operator."""
+        if self.whole:
+            return f"remove {self.entry}"
+        return f"remove the hook running `{self.command}` from {self.entry}"
+
+
+@dataclass(frozen=True)
 class Status:
     # "ok", "missing", "stale" (written for another captured_dir or by an
     # earlier build), or "differs" (carries a change this package never wrote)
     script: str
     settings: str  # "ok" or "missing"
+    duplicates: tuple[Duplicate, ...] = ()
 
     @property
     def ok(self) -> bool:
-        return self.script == "ok" and self.settings == "ok"
+        return self.script == "ok" and self.settings == "ok" and not self.duplicates
 
     @property
     def advice(self) -> str:
@@ -150,7 +181,16 @@ class Status:
                 f"`uv run outlooks hook --apply` {wires}, and "
                 "`uv run outlooks hook --apply --force` overwrites it"
             )
-        return "" if self.ok else "run `uv run outlooks hook --apply`"
+        if self.script == "ok" and self.settings == "ok":
+            return DUPLICATE_ADVICE if self.duplicates else ""
+        advice = "run `uv run outlooks hook --apply`"
+        return f"{advice}; {DUPLICATE_ADVICE}" if self.duplicates else advice
+
+
+DUPLICATE_ADVICE = (
+    "remove each duplicate entry from its file by hand: every call is captured "
+    "once per hook, and `outlooks hook --apply` does not edit it"
+)
 
 
 def _entries(settings: dict[str, Any]) -> list[dict[str, Any]]:
@@ -168,19 +208,104 @@ def _entries(settings: dict[str, Any]) -> list[dict[str, Any]]:
     return entries
 
 
-def _wired(settings: dict[str, Any]) -> bool:
-    return any(
-        entry.get("matcher") == MATCHER
-        and any(
-            isinstance(h, dict) and "outlook-capture.sh" in (h.get("command") or "")
-            for h in entry.get("hooks") or []
-        )
+def _commands(entry: dict[str, Any]) -> list[str]:
+    return [
+        h.get("command") or ""
+        for h in entry.get("hooks") or []
+        if isinstance(h, dict) and h.get("type", "command") == "command"
+    ]
+
+
+def _wiring(settings: dict[str, Any]) -> list[str]:
+    """The commands of the entries that run the capture script."""
+    return [
+        command
         for entry in _entries(settings)
+        if entry.get("matcher") == MATCHER
+        for command in _commands(entry)
+        if "outlook-capture.sh" in command
+    ]
+
+
+def _wired(settings: dict[str, Any]) -> bool:
+    return bool(_wiring(settings))
+
+
+# Matchers that run their hooks on every tool: a hook under one is there for
+# every call (a logger, a notifier), so it is a duplicate only when its command
+# writes to the captures directory.
+CATCH_ALL = (None, "", "*")
+
+
+def _covers(matcher: Any) -> bool:
+    """Whether a PostToolUse matcher runs its hooks on either connector tool.
+
+    As Claude Code reads one: none, ``""``, or ``*`` matches every tool (see
+    :data:`CATCH_ALL`), a matcher of plain names separated by ``|`` matches
+    those names exactly, and any other is a regular expression searched for in
+    the tool's name.
+    """
+    if matcher in CATCH_ALL:
+        return True
+    if not isinstance(matcher, str):
+        return False
+    if re.fullmatch(r"[\w|-]+", matcher):
+        return any(tool in matcher.split("|") for tool in TOOLS)
+    try:
+        return any(re.search(matcher, tool) for tool in TOOLS)
+    except re.error:
+        return False
+
+
+def user_settings() -> Path:
+    """The user's own Claude Code settings, which apply in every repo."""
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude"
+    return Path(base) / "settings.json"
+
+
+def duplicates(root: Path) -> tuple[Duplicate, ...]:
+    """Every other PostToolUse hook that runs on a connector call.
+
+    The project, local, and user settings are read; a hook whose matcher names
+    either connector tool, or a catch-all hook whose command names the captures
+    directory, is a duplicate unless its command is one that wires the capture
+    script in ``.claude/settings.json``. Claude Code runs an identical command
+    once however many files list it, so that one is not.
+    ``ValueError`` when a settings file does not parse.
+    """
+    wired = set(_wiring(_read_settings(root)))
+    folder = config.captured_dir().name
+    files = (
+        (str(SETTINGS_PATH), root / SETTINGS_PATH),
+        (str(LOCAL_PATH), root / LOCAL_PATH),
+        (str(user_settings()), user_settings()),
     )
+    found: list[Duplicate] = []
+    for shown, path in files:
+        try:
+            entries = _entries(_read_file(path))
+        except ValueError as e:
+            raise ValueError(f"{shown}: {e}") from None
+        for entry in entries:
+            matcher = entry.get("matcher")
+            if not _covers(matcher):
+                continue
+            commands = _commands(entry)
+            extra = [
+                c
+                for c in commands
+                if c not in wired and (matcher not in CATCH_ALL or folder in c)
+            ]
+            whole = len(extra) == len(entry.get("hooks") or [])
+            found += [Duplicate(shown, c, json.dumps(entry), whole) for c in extra]
+    return tuple(found)
 
 
 def _read_settings(root: Path) -> dict[str, Any]:
-    path = root / SETTINGS_PATH
+    return _read_file(root / SETTINGS_PATH)
+
+
+def _read_file(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     settings = json.loads(path.read_text(encoding="utf-8"))
@@ -207,8 +332,8 @@ def settings_state(root: Path) -> str:
 
 
 def status(root: Path, start: Path | None = None) -> Status:
-    """Whether ``root`` has the capture script and the settings entry."""
-    return Status(script_state(root, start), settings_state(root))
+    """Whether ``root`` has the capture script, the settings entry, and no other."""
+    return Status(script_state(root, start), settings_state(root), duplicates(root))
 
 
 def apply(root: Path, *, force: bool = False, start: Path | None = None) -> list[str]:
@@ -220,7 +345,9 @@ def apply(root: Path, *, force: bool = False, start: Path | None = None) -> list
     silently changes is how an archive loses its source.
     """
     done: list[str] = []
-    now = status(root, start)
+    # Not status(): the duplicates are only reported, so a settings file this
+    # never writes does not stop it.
+    now = Status(script_state(root, start), settings_state(root))
     path = root / SCRIPT_PATH
     if now.script in ("missing", "stale") or (now.script == "differs" and force):
         path.parent.mkdir(parents=True, exist_ok=True)
