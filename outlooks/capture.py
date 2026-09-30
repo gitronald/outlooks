@@ -53,6 +53,9 @@ class Capture:
     # The hook saw output that can't be recovered here (a spilled result whose
     # file is gone, a response of no known shape): no blocks, but not empty.
     lost: bool = False
+    # The call the hook ran for; two captures naming one are one call captured
+    # by two hooks.
+    tool_use_id: str | None = None
 
     @property
     def mailbox(self) -> str | None:
@@ -230,6 +233,7 @@ def read_capture(path: Path) -> Capture | None:
     else:
         return None
     blocks = _blocks(data.get("tool_response"), _saved_copy(path))
+    call = data.get("tool_use_id")
     return Capture(
         path,
         tool,
@@ -237,6 +241,7 @@ def read_capture(path: Path) -> Capture | None:
         blocks or [],
         _captured_at(path),
         lost=blocks is None,
+        tool_use_id=call if isinstance(call, str) and call else None,
     )
 
 
@@ -270,6 +275,9 @@ class Imported:
     """What ``import_captures`` did, for the command's report."""
 
     other_mailbox: int = 0
+    # Captures of a call already captured (the same tool_use_id): a second
+    # hook on the connector tools. Skipped; `outlooks hook` names the hook.
+    duplicates: list[Path] = field(default_factory=list)
     lost: list[Path] = field(default_factory=list)
     hits_added: int = 0
     hits_known: int = 0
@@ -293,14 +301,25 @@ def import_captures(
     """Put every capture from ``mailbox`` (default: the configured one) in the archive.
 
     Search hits go to tier 1 and reads to tier 2, through the store's write-once
-    saves, so re-importing the same captures is a no-op. A read that differs from
-    the stored message is listed in ``messages_differ`` with the fields that
-    differ; with ``replace`` it, and any stored hit that differs from a capture
-    of the same copy, is rewritten from the capture instead (the one-time
-    repair of model-typed files).
+    saves, so re-importing the same captures is a no-op. A capture of a call an
+    earlier one already captured (the same ``tool_use_id``) is skipped and listed
+    in ``duplicates``. A read that differs from the stored message is listed in
+    ``messages_differ`` with the fields that differ; with ``replace`` it, and
+    any stored hit that differs from a capture of the same copy, is rewritten
+    from the capture instead (the one-time repair of model-typed files).
     """
     mailbox = (mailbox or config.mailbox()).lower()
     done = Imported()
+    calls: set[str] = set()
+    distinct: list[Capture] = []
+    for c in captures:
+        if c.tool_use_id in calls:
+            done.duplicates.append(c.path)
+            continue
+        if c.tool_use_id is not None:
+            calls.add(c.tool_use_id)
+        distinct.append(c)
+    captures = distinct
     ours = [c for c in captures if c.is_of(mailbox)]
     done.other_mailbox = len(captures) - len(ours)
     done.lost = [c.path for c in ours if c.lost]

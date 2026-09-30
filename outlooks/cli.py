@@ -88,6 +88,12 @@ def import_(
         f"{len(captures)} captures ({done.other_mailbox} other mailbox), "
         f"{len(other)} other files skipped"
     )
+    if done.duplicates:
+        typer.echo(
+            f"  {len(done.duplicates)} DUPLICATE captures of a call already "
+            "captured, skipped: a second hook captures the connector tools; "
+            "`uv run outlooks hook` names it"
+        )
     for path in done.lost:
         typer.echo(
             f"  LOST capture (its output can't be recovered; call again): {path}"
