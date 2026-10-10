@@ -77,6 +77,10 @@ connector tools, since Claude Code runs every one.
 - run: uv run outlooks doctor
 ```
 
+The archive check parses `coverage.csv`, the hits files, and every message
+file, and names the first one that does not parse or, for a message, is
+stored under a name other than its `internetMessageId`'s hash.
+
 ## Upgrade
 
 ```bash
@@ -197,7 +201,7 @@ so one repair never rewrites anything else that differs.
 | Command | Does |
 |---|---|
 | `outlooks import [paths] [--replace]` | file the hook's captures; record complete windows |
-| `outlooks coverage [--since] [--ledger]` | covered windows, gaps, unread counts, ledger lag, and the next sweep's start |
+| `outlooks coverage [--since] [--ledger]` | covered spans, gaps, unread counts, ledger lag, and the next sweep's start |
 | `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, `notice`, or `unlisted` (`none` for the hits with no sender) |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |
@@ -215,6 +219,9 @@ so one repair never rewrites anything else that differs.
 | `outlooks doctor` | settings, profile, archive, hook, and skill stub in one read-only pass; exit 1 if any check fails |
 | `outlooks skill`, `outlooks doc`, `outlooks install`, `outlooks permissions` | the skill, its documents, the stub, and its permission profile ([pkgskills](https://github.com/gitronald/pkgskills)) |
 
+The sweep presents candidates at step `approval`; lookup widens an incomplete
+search at step `widen`. Cite these step names in a repo's own skills.
+
 ## Python API
 
 A repo that imports this package may import the names below, and nothing
@@ -224,10 +231,10 @@ changelog under *Changed* or *Removed*.
 
 | Module | Public names |
 |---|---|
-| `outlooks.store` | `archive_root`, `id_hash`, `stable`, `load_hits`, `load_messages`, `newest_hit`, `StoreError` |
+| `outlooks.store` | `id_hash`, `stable`, `load_hits`, `load_messages`, `newest_hit`, `StoreError` |
 | `outlooks.classify` | `Mail`, `Facts`, `view`, `classify`, `is_reply`, `is_auto_reply`, `thread_subject` |
 | `outlooks.detail` | `detail`, `details_by_id`, `body_text` |
-| `outlooks.config` | `Settings`, `load`, `settings`, `KEYS`, `DEFAULTS`, `ConfigError`, `is_system_sender`, `is_notice_sender`, `mailbox`, `archive_dir`, `captured_dir`, `scratch_dir`, `zone`, `zone_label` |
+| `outlooks.config` | `Settings`, `load`, `settings`, `KEYS`, `DEFAULTS`, `ConfigError`, `is_system_sender`, `is_notice_sender`, `archive_mailbox`, `archive_dir`, `captured_dir`, `scratch_dir`, `zone`, `zone_label` |
 
 The API reads the archive and never writes it: a repo fills the archive
 through `outlooks import`.

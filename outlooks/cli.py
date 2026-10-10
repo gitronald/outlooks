@@ -59,7 +59,7 @@ def _mailbox(mailbox: str | None) -> str:
     from outlooks import config
 
     try:
-        return (mailbox or config.mailbox()).lower()
+        return (mailbox or config.archive_mailbox()).lower()
     except config.ConfigError as e:
         raise _fail(e) from None
 
@@ -391,12 +391,12 @@ def check(
 
     rows = lookup.check(name)
     settings = config.settings()
-    show_system = bool(settings.system_senders or settings.notice_senders)
+    show_automated = bool(settings.system_senders or settings.notice_senders)
     for r in rows:
-        system = f" system={r.system}" if show_system else ""
+        automated = f" automated={r.automated}" if show_automated else ""
         typer.echo(
             f"{r.nn} {r.received or '-'} {r.day or '-'} {'ok' if r.ok else 'BAD'} "
-            f"{r.direction:3}{system} txt={r.texts} {r.subject[:60]}"
+            f"{r.direction:3}{automated} txt={r.texts} {r.subject[:60]}"
         )
         if r.finding:
             typer.echo(f"   {r.finding}")

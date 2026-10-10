@@ -30,7 +30,6 @@ FIXTURES = Path(__file__).parent / "fixtures" / "outlook"
 PUBLIC = {
     "store": {
         "StoreError": None,
-        "archive_root": (),
         "id_hash": ("internet_message_id",),
         "stable": ("payload",),
         "load_hits": ("root=",),
@@ -87,7 +86,7 @@ PUBLIC = {
         "settings": (),
         "is_system_sender": ("address",),
         "is_notice_sender": ("address",),
-        "mailbox": (),
+        "archive_mailbox": (),
         "archive_dir": (),
         "captured_dir": (),
         "scratch_dir": (),
@@ -307,3 +306,13 @@ def test_readme_fixture_pins_every_setting_the_suite_pins():
     pinned = set(re.findall(r'"(OUTLOOKS_[A-Z_]+)"', conftest))
     assert pinned == set(re.findall(r'"(OUTLOOKS_[A-Z_]+)"', section))
     assert {name.removeprefix("OUTLOOKS_").lower() for name in pinned} == set(KEYS)
+
+
+def test_doctor_archive_success_note_names_each_checked_file_kind():
+    from outlooks import config, doctor
+
+    root = config.archive_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    archive = next(result for result in doctor.run() if result.check == "archive")
+    assert archive.ok
+    assert archive.note == f"{root}: 0 hits files, 0 message files, 0 coverage rows"

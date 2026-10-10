@@ -32,7 +32,6 @@ from outlooks.timestamps import parse_ts
 # archive through ``outlooks import``, never by calling the store.
 __all__ = [
     "StoreError",
-    "archive_root",
     "id_hash",
     "load_hits",
     "load_messages",
@@ -49,13 +48,8 @@ class StoreError(Exception):
     """A payload the store cannot take, or one that contradicts what it holds."""
 
 
-def archive_root() -> Path:
-    """The committed mailbox archive, from ``[tool.outlooks] archive_dir``."""
-    return config.archive_dir()
-
-
 def _root(root: Path | None) -> Path:
-    return archive_root() if root is None else root
+    return config.archive_dir() if root is None else root
 
 
 def id_hash(internet_message_id: str) -> str:
@@ -160,13 +154,13 @@ def replace_message(message: dict[str, Any], root: Path | None = None) -> bool:
 
 
 def uri_owner(uri: str) -> str | None:
-    """The mailbox a connector uri names, from its ``owner`` parameter."""
+    """The owner a connector uri names, from its ``owner`` parameter."""
     owner = parse_qs(urlparse(uri).query).get("owner")
     return owner[0].lower() if owner else None
 
 
-def hit_mailbox(hit: dict[str, Any]) -> str | None:
-    """The mailbox a hit was listed from, from its uri's ``owner`` parameter."""
+def hit_owner(hit: dict[str, Any]) -> str | None:
+    """The owner a hit was listed from, from its uri's ``owner`` parameter."""
     return uri_owner(hit.get("uri", ""))
 
 
@@ -184,7 +178,7 @@ def save_hits(
     for hit in page:
         if "internetMessageId" not in hit:
             continue  # the paging trailer
-        box = (mailbox or hit_mailbox(hit) or "").lower()
+        box = (mailbox or hit_owner(hit) or "").lower()
         if not box:
             raise StoreError(
                 f"no mailbox for hit {hit['internetMessageId']}; pass --mailbox"

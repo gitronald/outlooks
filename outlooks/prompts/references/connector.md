@@ -74,7 +74,7 @@ to the captures directory; one command files them all:
 
 ```bash
 {cli} import      # captures -> hits, messages, attachment texts, coverage.csv
-{cli} coverage    # which windows are complete, and the gaps (read-only)
+{cli} coverage    # covered spans and the gaps between them (read-only)
 ```
 
 **Never type connector output into a file for the archive.** A retyped copy

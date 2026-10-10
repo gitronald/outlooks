@@ -72,7 +72,7 @@ def test_split_matches_on_sender_recipients_and_subject(tmp_path):
     no_match = hit("<a4>", "x@example.com", ["desk@example.org"], subject="unrelated")
     write_page(scratch, "priya", 1, [by_sender, by_recipient, by_subject, no_match])
 
-    result = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    result = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     ids = {h["internetMessageId"] for _, h in [*result.known, *result.to_read]}
     assert ids == {"<a1>", "<a2>", "<a3>"}
 
@@ -88,11 +88,11 @@ def test_split_matches_the_summary_only_with_match_summary(tmp_path):
     )
     write_page(scratch, "priya", 1, [named_in_summary])
 
-    with_summary = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    with_summary = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     assert with_summary.total == 1
 
     without_summary = lk.split(
-        "priya", ["priya"], scratch=scratch, archive=archive, match_summary=False
+        "priya", ["priya"], scratch=scratch, root=archive, match_summary=False
     )
     assert without_summary.total == 0
 
@@ -128,7 +128,7 @@ def test_split_pairs_a_system_notice_to_us_near_a_matched_system_hit(tmp_path):
     )
     write_page(scratch, "priya", 1, [matched_system, paired_to_us, too_late_to_us])
 
-    result = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    result = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     ids = {h["internetMessageId"] for _, h in [*result.known, *result.to_read]}
     assert ids == {"<s1>", "<s2>"}
 
@@ -148,7 +148,7 @@ def test_split_writes_timelines_for_archived_hits_and_batches_the_rest(tmp_path)
 
     batches = tmp_path / "batches"
     result = lk.split(
-        "priya", ["priya"], scratch=scratch, archive=archive, batches=batches, per=2
+        "priya", ["priya"], scratch=scratch, root=archive, batches=batches, per=2
     )
 
     assert result.pages == 1
@@ -182,7 +182,7 @@ def test_split_removes_stale_timeline_files_before_renumbering(tmp_path):
     stale.write_text("{}", encoding="utf-8")
     write_page(scratch, "priya", 1, [])
 
-    lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    lk.split("priya", ["priya"], scratch=scratch, root=archive)
     assert not stale.exists()
 
 
@@ -206,12 +206,12 @@ def test_a_lookup_of_100_or_more_hits_is_renumbered_and_checked_in_full(tmp_path
     other = scratch / "priya-2024-01.timeline.json"
     other.write_text("{}", encoding="utf-8")
 
-    result = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    result = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     assert [nn for nn, _ in result.known][-2:] == ["99", "100"]
     assert not (scratch / "priya-101.timeline.json").exists()
     assert other.exists() and (scratch / "priya-page-01.json").exists()
 
-    rows = lk.check("priya", scratch=scratch, archive=archive)
+    rows = lk.check("priya", scratch=scratch, root=archive)
     assert [r.nn for r in rows] == [f"{n:02d}" for n in range(1, 101)]
     assert all(r.ok for r in rows)
 
@@ -233,7 +233,7 @@ def test_split_filters_by_since(tmp_path):
     write_page(scratch, "priya", 1, [early, late])
 
     result = lk.split(
-        "priya", ["priya"], scratch=scratch, archive=archive, since="2026-01-15"
+        "priya", ["priya"], scratch=scratch, root=archive, since="2026-01-15"
     )
     assert [h["internetMessageId"] for _, h in result.to_read] == ["<d2>"]
 
@@ -246,7 +246,7 @@ def test_check_reports_ok_and_bad_rows(tmp_path):
     good_hit = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
     archive_message(archive, good_hit)
     write_page(scratch, "priya", 1, [good_hit])
-    lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    lk.split("priya", ["priya"], scratch=scratch, root=archive)
 
     # A second timeline claiming a message the archive never received.
     bad = {
@@ -261,12 +261,12 @@ def test_check_reports_ok_and_bad_rows(tmp_path):
         "weblink": "",
         "attachments": [],
         "summary": "",
-        "system": False,
+        "automated": False,
         "source": "manual",
     }
     (scratch / "priya-02.timeline.json").write_text(json.dumps(bad), encoding="utf-8")
 
-    rows = lk.check("priya", scratch=scratch, archive=archive)
+    rows = lk.check("priya", scratch=scratch, root=archive)
     by_nn = {r.nn: r for r in rows}
     assert by_nn["01"].ok is True
     assert by_nn["02"].ok is False
@@ -336,7 +336,7 @@ def test_split_pairs_nothing_with_a_matched_notice(
         received="2026-01-05T10:00:20Z",
     )
     write_page(scratch, "priya", 1, [bounce, system_to_us])
-    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path / "archive")
+    out = lk.split("priya", ["priya"], scratch=scratch, root=tmp_path / "archive")
     assert [h["internetMessageId"] for _, h in out.to_read] == [
         bounce["internetMessageId"]
     ]
@@ -359,7 +359,7 @@ def timeline(scratch, name, nn, **changes):
         "weblink": "",
         "attachments": [],
         "summary": "",
-        "system": False,
+        "automated": False,
         **changes,
     }
     record = {k: v for k, v in record.items() if v is not None}
@@ -379,7 +379,7 @@ def test_check_says_why_a_row_is_bad(tmp_path):
     timeline(scratch, "priya", "03", internet_message_id="<never-read>")
     timeline(scratch, "priya", "04", date_local=None)
     timeline(scratch, "priya", "05", internet_message_id=None, date_local="")
-    rows = lk.check("priya", scratch=scratch, archive=archive)
+    rows = lk.check("priya", scratch=scratch, root=archive)
     assert [(r.nn, r.ok, r.finding) for r in rows] == [
         ("01", True, ""),
         ("02", False, "date_local 2026-01-01, the archive says 2025-12-31"),
@@ -396,7 +396,7 @@ def test_the_split_writes_exactly_the_documented_keys(tmp_path):
     h = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
     archive_message(archive, h)
     write_page(scratch, "priya", 1, [h])
-    lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    lk.split("priya", ["priya"], scratch=scratch, root=archive)
     written = json.loads((scratch / "priya-01.timeline.json").read_text("utf-8"))
     assert tuple(written) == lk.TIMELINE_KEYS
     assert set(lk.REQUIRED_KEYS) <= set(lk.CHECK_READS) <= set(lk.TIMELINE_KEYS)
@@ -450,7 +450,7 @@ def test_reset_moves_a_names_pages_and_timelines_and_nothing_else(tmp_path):
     assert not any(p.exists() for p in mine)
     assert all(p.exists() for p in others)
     # The split now finds nothing of the earlier lookup.
-    assert lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path).pages == 0
+    assert lk.split("priya", ["priya"], scratch=scratch, root=tmp_path).pages == 0
 
 
 def test_reset_never_overwrites_an_earlier_reset(tmp_path):
@@ -493,7 +493,7 @@ def test_split_leaves_out_the_pages_of_a_longer_name(tmp_path):
     other = hit("<e2>", "priya.nakamura@example.com", ["desk@example.org"])
     write_page(scratch, "priya", 1, [mine])
     write_page(scratch, "priya-n", 1, [other])
-    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path)
+    out = lk.split("priya", ["priya"], scratch=scratch, root=tmp_path)
     assert out.pages == 1
 
 
@@ -504,7 +504,7 @@ def test_split_clears_only_its_stale_batches(tmp_path, remaining):
     )
     hits = [hit(f"<{n}@example.org>", "reader@example.org", []) for n in range(5)]
     write_page(scratch, "topic", 1, hits)
-    lk.split("topic", ["reader"], scratch=scratch, archive=archive, batches=batches)
+    lk.split("topic", ["reader"], scratch=scratch, root=archive, batches=batches)
     unrelated = batches / "topic-other-batch-01.txt"
     unrelated.write_text("keep this batch\n", encoding="utf-8")
     note = batches / "topic-batch-notes.txt"
@@ -512,7 +512,7 @@ def test_split_clears_only_its_stale_batches(tmp_path, remaining):
     write_page(scratch, "topic", 1, hits[:remaining])
 
     result = lk.split(
-        "topic", ["reader"], scratch=scratch, archive=archive, batches=batches
+        "topic", ["reader"], scratch=scratch, root=archive, batches=batches
     )
 
     assert sorted(batches.glob("topic-batch-[0-9]*.txt")) == result.batches

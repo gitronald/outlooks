@@ -113,7 +113,7 @@ def read_worklist(
     if per < 1:
         raise WorklistError(f"per must be at least 1, not {per}")
     lo, hi = bound(after), bound(before)
-    box = mailbox or config.mailbox()
+    box = mailbox or config.archive_mailbox()
     captures, _ = load_captures(sorted(config.captured_dir().glob("*.json")))
     listed: dict[str, dict[str, Any]] = {}
     read: set[str] = set()
@@ -343,7 +343,7 @@ class Audit:
     bad: list[str] = field(default_factory=list)
 
 
-def audit(prefix: str, *, archive: Path | None = None) -> Audit:
+def audit(prefix: str, *, root: Path | None = None) -> Audit:
     """Attachment texts for the archived messages received in ``prefix``.
 
     Counts the text-bearing attachments (not inline, not an image by
@@ -357,7 +357,7 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
     connector's refusal. Also lists a text file sitting in an image's slot and
     any message file that does not parse.
     """
-    messages = (archive or store.archive_root()) / "messages"
+    messages = (root or config.archive_dir()) / "messages"
     tried, binary = attachment_reads()
     result = Audit()
     for path in sorted(messages.glob("*.json")):

@@ -25,13 +25,38 @@ what a consuming repo has to do about it:
 
 ### Changed
 
+- The sweep's step `worklist` is now `approval`, and the lookup's step
+  `gaps` is now `widen`, so "worklist" means only a reader's uri list and
+  "gap" only an uncovered span of coverage. A repo whose own skill or
+  profile cites either step by name cites the new one.
+- `config.mailbox()` is now `config.archive_mailbox()`: it is the address
+  the archive files under, which differs from the `mailbox` setting when
+  that is unset. A repo that calls it renames the call. The `mailbox`
+  setting itself is unchanged.
+- A lookup's timeline key `system` is now `automated`, since it is true for
+  notice senders as well as system senders, and `outlooks check` prints
+  `automated=` in its place. A repo whose own code or brief reads or writes
+  the key renames it; timeline files already in the scratch directory are
+  rebuilt by the next lookup.
 - `outlooks split --batches <dir>` removes that lookup's earlier
   `{name}-batch-NN.txt` files before writing new ones, so a repeat lookup
   with fewer unread hits leaves no stale batch behind. Other lookups' batches
   and other files in the folder are left alone.
 
+### Removed
+
+- `store.archive_root()`, which returned the same path as
+  `config.archive_dir()`. A repo that calls it calls `config.archive_dir()`.
+
 ### Fixed
 
+- `outlooks doctor`'s archive check parses every `messages/*.json` too. It
+  fails, naming the first bad file, on one that is not a JSON object, has no
+  `internetMessageId`, or is stored under a name other than that id's hash
+  (the store would never find it). Its `ok` line also counts message files.
+- `outlooks coverage` counts a message received at a covered span's end
+  instant as covered, since the pull that ends there listed it, instead of
+  as `archived (lookup only)` in the gap after it.
 - `outlooks coverage` takes the ledger's high-water mark, and
   `store.newest_hit` the newest hit, by instant rather than by string, so
   timestamps written with different offsets compare correctly.

@@ -1,6 +1,6 @@
 """Tests for the window-mode bulk-read worklist and the attachment-text audit.
 
-Both read config's own paths (``config.captured_dir()``, ``store.archive_root()``)
+Both read config's own paths (``config.captured_dir()``, ``config.archive_dir()``)
 rather than taking overrides, so captures and archived messages are written
 directly under those conftest-provided, per-test directories.
 """
@@ -199,7 +199,7 @@ def test_read_worklist_replaces_earlier_batch_files(tmp_path):
 
 
 def test_audit_counts_texts_missing_untried_and_bad_files():
-    archive = store.archive_root()
+    archive = config.archive_dir()
     messages = archive / "messages"
     messages.mkdir(parents=True, exist_ok=True)
 
@@ -322,7 +322,7 @@ def test_audit_skips_an_image_sent_as_octet_stream(name):
     assert (result.missing, result.listed, result.untried) == ({}, [], [])
 
     key = store.id_hash(m1["internetMessageId"])
-    (store.archive_root() / "messages" / f"{key}.1.txt").write_text("x", "utf-8")
+    (config.archive_dir() / "messages" / f"{key}.1.txt").write_text("x", "utf-8")
     assert wl.audit("2026-03").image_slots == [f"{key}.1"]
 
 
@@ -459,8 +459,8 @@ def test_read_worklist_reads_one_copy_of_a_mass_send(tmp_path):
     unlisted = wl.read_worklist("2026-03-10", "2026-03-12", out)
     assert (len(unlisted.todo), unlisted.mass_copies) == (4, 0)
 
-    (store.archive_root()).mkdir(parents=True, exist_ok=True)
-    (store.archive_root() / "mass-sends.csv").write_text(
+    (config.archive_dir()).mkdir(parents=True, exist_ok=True)
+    (config.archive_dir() / "mass-sends.csv").write_text(
         "sender,subject,after,before,exemplar\n"
         "Events@Example.org,Spring open house,2026-03-10T12:00:00Z,"
         "2026-03-10T12:00:00Z,<m2@example.com>\n",
@@ -582,7 +582,7 @@ def test_audit_reports_malformed_message_shapes(tmp_path, payload):
     messages = tmp_path / "messages"
     messages.mkdir()
     (messages / "bad.json").write_text(json.dumps(payload), encoding="utf-8")
-    result = wl.audit("2026-03", archive=tmp_path)
+    result = wl.audit("2026-03", root=tmp_path)
     assert result.bad == ["bad.json"]
     assert result.counts == {}
 

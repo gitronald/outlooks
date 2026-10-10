@@ -42,12 +42,18 @@ TIMELINE_KEYS = (
     "weblink",
     "attachments",
     "summary",
-    "system",
+    "automated",
     "source",
 )
 # The keys `check` reads, and those of them it cannot do without: the message
 # a file is about, and the local date it claims.
-CHECK_READS = ("internet_message_id", "date_local", "direction", "system", "subject")
+CHECK_READS = (
+    "internet_message_id",
+    "date_local",
+    "direction",
+    "automated",
+    "subject",
+)
 REQUIRED_KEYS = ("internet_message_id", "date_local")
 # The searches whose pages carry their kind in the file name
 # (``{name}-sent-page-{n}.json``); the query search's carry none.
@@ -76,7 +82,7 @@ def timeline_from_archive(path: Path) -> dict[str, Any]:
         "weblink": m.get("webLink", ""),
         "attachments": [a.get("name", "") for a in m.get("attachments") or []],
         "summary": m.get("bodyPreview", ""),
-        "system": is_automated(sender),
+        "automated": is_automated(sender),
         "source": "archive",
     }
 
@@ -110,7 +116,7 @@ def split(
     batches: Path | None = None,
     per: int = 2,
     scratch: Path | None = None,
-    archive: Path | None = None,
+    root: Path | None = None,
 ) -> Split:
     """Merge a lookup's pages, keep the matching hits, and split them.
 
@@ -125,7 +131,7 @@ def split(
     kept too.
     """
     scratch = scratch or config.scratch_dir()
-    archive = archive or store.archive_root()
+    root = root or config.archive_dir()
     own = config.settings().own_addresses
     terms = [t.lower() for t in terms]
     for _, stale in timelines(scratch, name):
@@ -164,7 +170,7 @@ def split(
     read_lines: list[str] = []
     for i, h in enumerate(ordered, 1):
         nn = f"{i:02d}"
-        path = store.message_path(h["internetMessageId"], archive)
+        path = store.message_path(h["internetMessageId"], root)
         if path.exists():
             timeline = timeline_from_archive(path)
             target = scratch / f"{name}-{nn}.timeline.json"
@@ -194,7 +200,7 @@ class Checked:
     day: str
     ok: bool
     direction: str
-    system: bool
+    automated: bool
     texts: int
     subject: str
     finding: str = ""  # why a row is not ok
@@ -230,7 +236,7 @@ def timelines(scratch: Path, name: str) -> list[tuple[str, Path]]:
 
 
 def check(
-    name: str, *, scratch: Path | None = None, archive: Path | None = None
+    name: str, *, scratch: Path | None = None, root: Path | None = None
 ) -> list[Checked]:
     """Every ``{name}-{nn}.timeline.json`` against the archive.
 
@@ -240,14 +246,14 @@ def check(
     key, so a file written by another build is not read as a wrong date.
     """
     scratch = scratch or config.scratch_dir()
-    messages = (archive or store.archive_root()) / "messages"
+    messages = (root or config.archive_dir()) / "messages"
     rows = []
     for nn, f in timelines(scratch, name):
         t = json.loads(f.read_text(encoding="utf-8"))
         absent = [key for key in REQUIRED_KEYS if not t.get(key)]
         mid = t.get("internet_message_id")
         h = store.id_hash(mid) if mid else ""
-        stored = store.message_path(mid, archive) if mid else messages / ".json"
+        stored = store.message_path(mid, root) if mid else messages / ".json"
         received = ""
         day = ""
         if h and stored.exists():
@@ -270,7 +276,7 @@ def check(
                 day=day,
                 ok=not finding,
                 direction=t.get("direction", ""),
-                system=bool(t.get("system")),
+                automated=bool(t.get("automated")),
                 texts=len(list(messages.glob(f"{h}.*.txt"))) if h else 0,
                 subject=t.get("subject", ""),
                 finding=finding,

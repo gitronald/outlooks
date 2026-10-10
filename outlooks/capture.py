@@ -58,23 +58,23 @@ class Capture:
     duration_ms: float | None = None
 
     @property
-    def mailbox(self) -> str | None:
+    def owner(self) -> str | None:
         if self.tool == "search":
             box = self.args.get("mailboxOwnerEmail")
             if box:
                 return box.lower()
-            return next((store.hit_mailbox(h) for h in self.hits), None)
+            return next((store.hit_owner(h) for h in self.hits), None)
         return store.uri_owner(self.args.get("uri", ""))
 
     def is_of(self, mailbox: str) -> bool:
-        """Whether this capture is of ``mailbox``.
+        """Whether this capture belongs under the archive's ``mailbox``.
 
         With no ``mailbox`` configured the searches are of the signed-in
-        account's own mailbox, so a capture that names none (an empty page, a
+        account, so a capture that names no owner (an empty page, a
         uri with no ``owner``) or names any of ``own_addresses`` is of it. With
-        one configured, a capture is of the mailbox it names and no other.
+        one configured, a capture is of the owner it names and no other.
         """
-        named = self.mailbox
+        named = self.owner
         if named == mailbox.lower():
             return True
         s = config.settings()
@@ -308,7 +308,7 @@ def import_captures(
     capture of the same copy, is rewritten from the capture instead (the
     one-time repair of model-typed files).
     """
-    mailbox = (mailbox or config.mailbox()).lower()
+    mailbox = (mailbox or config.archive_mailbox()).lower()
     done = Imported()
     # One capture per call: the first that kept its output, else the first. A
     # second hook may not keep a spilled result's copy, so its capture of a

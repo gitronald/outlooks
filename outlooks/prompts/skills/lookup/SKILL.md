@@ -75,7 +75,7 @@ answer.
 In practice the calls go through subagents (see [Running a lookup through
 subagents](#running-a-lookup-through-subagents)); the shapes are the same.
 
-## 3. Fill gaps only if the picture is incomplete (step `gaps`)
+## 3. Widen the search only if the picture is incomplete (step `widen`)
 
 - Missing our side, or the thread looks truncated →
   `folderName: "Sent Items"` + the same `query`.
@@ -184,11 +184,11 @@ The split:
      profile says when a title search applies.
 
    The searcher's instructions are fixed, so they live in a brief: write
-   each searcher a one-line worklist file in the scratch directory,
+   each searcher a one-line search task file in the scratch directory,
    `{name} query|sender|title|sent <term> [<fallback>]`, and launch it with
    the one-sentence prompt: run `{cli} doc lookup/searcher-brief` and
-   follow it; your worklist is `<path>`; cat it first; work from the repo
-   root. It keeps its page files in place: the split step reads them.
+   follow it; your search task file is `<path>`; cat it first; work from the
+   repo root. It keeps its page files in place: the split step reads them.
 
    Several people: all searchers per person, all in parallel. Each writes
    every page to a scratch file for the split (the query searcher writes
@@ -240,7 +240,7 @@ The split:
    each read) and writes `{name}-{nn}.timeline.json` in the scratch
    directory per message: `file, received_utc, date_local, direction,
    sender, to, subject, internet_message_id, weblink, attachments, summary,
-   system` (`{cli} doc lookup/timeline` lists every key, and which of them
+   automated` (`{cli} doc lookup/timeline` lists every key, and which of them
    `check` reads). Readers archive nothing themselves: the main session runs one
    `import` after the round, so parallel agents never write the archive at
    once. Give each reader the `nn` from the worklist, so its files slot in
@@ -298,7 +298,7 @@ hit's `hasAttachments` is `true` for an inline signature logo, so it does not
 predict a text file); that it writes nothing under the archive (the main
 session imports its captures), and never the ledger or any repo record; and
 that its timeline file is a report, not a decision — `direction` and
-`system` are the only judgments it makes. Check its work before using it:
+`automated` are the only judgments it makes. Check its work before using it:
 the local dates, the file list, and that no `.txt` sits beside a message
 whose attachments are all images.
 

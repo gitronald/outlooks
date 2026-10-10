@@ -10,7 +10,14 @@ newest first, and each page reports the window's ``totalResultCount``.
 captured offsets run from 0 to ``total - 1``. ``record`` appends each complete
 window to ``coverage.csv`` beside the archive once every message it listed is
 in the archive, so a row is evidence rather than a claim. ``report`` merges the
-rows and lists the gaps between them.
+rows into covered spans and lists the gaps (uncovered spans) between them.
+
+A pull's bounds are inclusive at both ends, so a covered span is too
+(``_covered``): a message received at a span's end instant was listed by the
+pull that ends there, and is counted as covered, not under the gap after it.
+``merge`` joins only overlapping or touching spans, so it never fills a gap.
+An open pull records its first page's timestamp as its end, so the report
+does not extend coverage through later paging.
 
 ``total`` counts folder copies (a message the mailbox sent to itself sits in
 Sent Items and in another folder), while the archive keys on
@@ -56,12 +63,12 @@ class CoverageError(Exception):
 
 def coverage_csv(root: Path | None = None) -> Path:
     """``coverage.csv`` beside the archive's ``hits/`` and ``messages/``."""
-    return (store.archive_root() if root is None else root) / "coverage.csv"
+    return (config.archive_dir() if root is None else root) / "coverage.csv"
 
 
 def ledger_csv(root: Path | None = None) -> Path:
     """The sweep's ``ledger.csv``, beside the archive."""
-    return (store.archive_root() if root is None else root) / "ledger.csv"
+    return (config.archive_dir() if root is None else root) / "ledger.csv"
 
 
 def mass_sends_csv(root: Path | None = None) -> Path:
@@ -70,11 +77,10 @@ def mass_sends_csv(root: Path | None = None) -> Path:
     A bulk send (a mail-merge, an announcement) leaves one copy per recipient,
     differing only in the recipient, so one full read stands for all of them.
     Each row names the ``sender``, the exact ``subject``, the ``after`` and
-    ``before`` UTC timestamps around the send (both inclusive, unlike a
-    window's bounds: they are typed by hand), and the ``exemplar``, the
-    ``internetMessageId`` of the copy read in full.
+    ``before`` UTC timestamps around the send (both inclusive, typed by hand),
+    and the ``exemplar``, the ``internetMessageId`` of the copy read in full.
     """
-    return (store.archive_root() if root is None else root) / "mass-sends.csv"
+    return (config.archive_dir() if root is None else root) / "mass-sends.csv"
 
 
 def mass_copies(
@@ -121,7 +127,7 @@ class Window:
 
     @property
     def end(self) -> datetime:
-        """The window's exclusive end; an open window ends at its first page.
+        """The pull's inclusive upper bound; an open pull ends at its first page.
 
         Every page of an open window reported the same total, so nothing
         arrived while it was paged, but mail after the first page may have.
@@ -281,7 +287,7 @@ def record(found: list[Window], root: Path | None = None) -> list[dict[str, str]
 
 
 def merge(rows: list[dict[str, str]]) -> list[tuple[datetime, datetime]]:
-    """The covered intervals, overlapping and touching rows merged."""
+    """The covered spans, overlapping and touching window rows merged."""
     spans = sorted((parse_ts(r["after"]), parse_ts(r["before"])) for r in rows)
     merged: list[tuple[datetime, datetime]] = []
     for start, end in spans:
@@ -295,7 +301,7 @@ def merge(rows: list[dict[str, str]]) -> list[tuple[datetime, datetime]]:
 def gaps(
     covered: list[tuple[datetime, datetime]], since: datetime, now: datetime
 ) -> list[tuple[datetime, datetime]]:
-    """The spans of ``[since, now)`` no covered interval reaches."""
+    """The spans of ``[since, now)`` no covered span reaches."""
     out: list[tuple[datetime, datetime]] = []
     cursor = since
     for start, end in covered:
@@ -314,8 +320,9 @@ def _received(hit: dict[str, Any]) -> datetime | None:
     return parse_ts(value) if value else None
 
 
-def _within(ts: datetime | None, spans: list[tuple[datetime, datetime]]) -> bool:
-    return ts is not None and any(a <= ts < b for a, b in spans)
+def _covered(ts: datetime | None, spans: list[tuple[datetime, datetime]]) -> bool:
+    """Whether ``ts`` falls in a span, both ends included (pulls are inclusive)."""
+    return ts is not None and any(a <= ts <= b for a, b in spans)
 
 
 def _local_time(ts: datetime) -> str:
@@ -363,19 +370,24 @@ def report(
     if not covered:
         lines.append("no windows recorded")
     for a, b in covered:
-        n = sum(_within(_received(h), [(a, b)]) for h in hits.values())
+        n = sum(_covered(_received(h), [(a, b)]) for h in hits.values())
         lines.append(f"  covered  {_local_time(a)} to {_local_time(b)}  {n} archived")
     start = since or (covered[0][0] if covered else None)
     if start is not None:
         for a, b in gaps(covered, start, now):
-            n = sum(_within(_received(h), [(a, b)]) for h in hits.values())
+            n = sum(
+                (ts := _received(h)) is not None
+                and a <= ts < b
+                and not _covered(ts, covered)
+                for h in hits.values()
+            )
             note = f"  {n} archived (lookup only)" if n else ""
             lines.append(f"  GAP      {_local_time(a)} to {_local_time(b)}{note}")
     unread: Counter[str] = Counter()
     by_design = 0
     for mid, h in hits.items():
         ts = _received(h)
-        if mid not in read and _within(ts, covered):
+        if mid not in read and _covered(ts, covered):
             assert ts is not None
             if mid in skipped:
                 by_design += 1
