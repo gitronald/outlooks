@@ -23,6 +23,37 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+### Changed
+
+- `outlooks split --batches <dir>` removes that lookup's earlier
+  `{name}-batch-NN.txt` files before writing new ones, so a repeat lookup
+  with fewer unread hits leaves no stale batch behind. Other lookups' batches
+  and other files in the folder are left alone.
+
+### Fixed
+
+- `outlooks coverage` takes the ledger's high-water mark, and
+  `store.newest_hit` the newest hit, by instant rather than by string, so
+  timestamps written with different offsets compare correctly.
+- `outlooks import` marks a capture LOST when its response holds a block it
+  cannot read as text, instead of dropping the block. A window page made only
+  of such blocks no longer records an empty window as covered.
+- `outlooks import` skips a capture file whose `tool_name` or `tool_input` is
+  malformed, instead of failing on it.
+- `outlooks split` numbers hits by instant, so hits with different offsets or
+  fractional seconds are numbered oldest first; it reads a naive
+  `received_utc` as UTC, not as the machine's local time; and it accepts an
+  archived message whose recipient or attachment list is null.
+- `outlooks audit` lists a message file whose JSON is not a message object, or
+  whose attachments are not a list of objects, under its unparsable files
+  instead of failing on it. It also matches attachment reads whose uri
+  percent-encodes the `/attachments/` path.
+- `outlooks render` removes the partial `.docx` when pandoc fails.
+- `outlooks worklist --per 0` is refused before any batch file is removed,
+  instead of removing them and then failing.
+- `outlooks windows` reports a `windows.json` that does not parse as an
+  error, instead of a traceback.
+
 ## [0.5.0] - 2026-10-10
 
 ### Added
