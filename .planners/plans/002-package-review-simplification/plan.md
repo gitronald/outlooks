@@ -1,8 +1,8 @@
 ---
 id: 2
 slug: package-review-simplification
-status: draft
-branch:
+status: active
+branch: feature/package-review-simplification
 created: 2026-10-10T11:46:13-07:00
 concluded:
 pr:
@@ -49,3 +49,11 @@ main session verifying and committing.
    around nullable fields, private-name imports, deleted rationale comments).
 3. Codex revision pass if needed, with a numbered list.
 4. Commit in logical chunks; raise contract-level naming findings with the user.
+
+## Log
+
+- **2026-10-10T11:46:24-07:00** — Activated.
+  - Branch: `feature/package-review-simplification`
+  - Base: `dev` at `0d75e8d`
+  - Worktree: `.worktrees/package-review-simplification`
+  - PR: pending
