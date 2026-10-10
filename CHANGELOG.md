@@ -23,6 +23,67 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-10
+
+### Changed
+
+- The sweep's step `worklist` is now `approval`, and the lookup's step
+  `gaps` is now `widen`, so "worklist" means only a reader's uri list and
+  "gap" only an uncovered span of coverage. A repo whose own skill or
+  profile cites either step by name cites the new one.
+- `config.mailbox()` is now `config.archive_mailbox()`: it is the address
+  the archive files under, which differs from the `mailbox` setting when
+  that is unset. A repo that calls it renames the call. The `mailbox`
+  setting itself is unchanged.
+- A lookup's timeline key `system` is now `automated`, since it is true for
+  notice senders as well as system senders, and `outlooks check` prints
+  `automated=` in its place. A repo whose own code or brief reads or writes
+  the key renames it; timeline files already in the scratch directory are
+  rebuilt by the next lookup.
+- The `classify` role `system` is now `automated`, matching the timeline
+  key: it covers mail from notice senders as well as system senders. A repo
+  that compares `Facts.role` with `"system"` compares it with `"automated"`.
+- `outlooks split --batches <dir>` removes that lookup's earlier
+  `{name}-batch-NN.txt` files before writing new ones, so a repeat lookup
+  with fewer unread hits leaves no stale batch behind. Other lookups' batches
+  and other files in the folder are left alone.
+
+### Removed
+
+- `store.archive_root()`, which returned the same path as
+  `config.archive_dir()`. A repo that calls it calls `config.archive_dir()`.
+
+### Fixed
+
+- `outlooks doctor`'s archive check parses every `messages/*.json` too. It
+  fails, naming the first bad file, on one that is not a JSON object, has no
+  `internetMessageId`, or is stored under a name other than that id's hash
+  (the store would never find it). Its `ok` line also counts message files.
+- `outlooks coverage` counts a message received at a covered span's end
+  instant as covered, since the pull that ends there listed it, instead of
+  as `archived (lookup only)` in the gap after it.
+- `outlooks coverage` takes the ledger's high-water mark, and
+  `store.newest_hit` the newest hit, by instant rather than by string, so
+  timestamps written with different offsets compare correctly.
+- `outlooks import` marks a capture LOST when its response holds a block it
+  cannot read as text, instead of dropping the block. A window page made only
+  of such blocks no longer records an empty window as covered.
+- `outlooks import` skips a capture file whose `tool_name` or `tool_input` is
+  malformed, instead of failing on it.
+- `outlooks split` numbers hits by instant, so hits with different offsets or
+  fractional seconds are numbered oldest first; it reads a naive
+  `received_utc` as UTC, not as the machine's local time; and it accepts an
+  archived message whose recipient or attachment list is null.
+- `outlooks audit` lists a message file whose JSON is not a message object, or
+  whose attachments are not a list of objects, under its unparsable files
+  instead of failing on it. It also matches attachment reads whose uri
+  percent-encodes the `/attachments/` path.
+- `outlooks render` removes the partial `.docx` when pandoc fails.
+- `outlooks worklist --per 0` is refused before any batch file is removed,
+  instead of removing them and then failing.
+- `outlooks windows` reports a `windows.json` that does not parse as an
+  error, instead of a traceback.
+
 ## [0.5.0] - 2026-10-10
 
 ### Added

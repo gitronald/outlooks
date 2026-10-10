@@ -31,14 +31,10 @@ from typing import Any
 from urllib.parse import unquote
 
 from outlooks import config, store
+from outlooks.attachments import attachment_id, is_image, uri_path
 
 # The hook names files by `date` on the capturing machine, which is taken to run
 # in the configured zone (``config.zone()``), the one everything is reported in.
-
-
-def captured_dir() -> Path:
-    """Where the hook writes, from ``[tool.outlooks] captured_dir``."""
-    return config.captured_dir()
 
 
 @dataclass(frozen=True)
@@ -62,23 +58,23 @@ class Capture:
     duration_ms: float | None = None
 
     @property
-    def mailbox(self) -> str | None:
+    def owner(self) -> str | None:
         if self.tool == "search":
             box = self.args.get("mailboxOwnerEmail")
             if box:
                 return box.lower()
-            return next((store.hit_mailbox(h) for h in self.hits), None)
+            return next((store.hit_owner(h) for h in self.hits), None)
         return store.uri_owner(self.args.get("uri", ""))
 
     def is_of(self, mailbox: str) -> bool:
-        """Whether this capture is of ``mailbox``.
+        """Whether this capture belongs under the archive's ``mailbox``.
 
         With no ``mailbox`` configured the searches are of the signed-in
-        account's own mailbox, so a capture that names none (an empty page, a
+        account, so a capture that names no owner (an empty page, a
         uri with no ``owner``) or names any of ``own_addresses`` is of it. With
-        one configured, a capture is of the mailbox it names and no other.
+        one configured, a capture is of the owner it names and no other.
         """
-        named = self.mailbox
+        named = self.owner
         if named == mailbox.lower():
             return True
         s = config.settings()
@@ -130,37 +126,6 @@ class Capture:
 
 def _is_message(block: dict[str, Any]) -> bool:
     return "internetMessageId" in block
-
-
-# The connector sends some images as ``application/octet-stream`` under a
-# placeholder name (``PNG image``, ``img-<uuid>``), so the content type alone
-# misses them. Design files carry no text worth reading either. Only a whole
-# uuid follows ``img-``, so a document named ``img-1234abcd-report.pdf`` is not
-# taken for one.
-IMAGE_NAME = re.compile(
-    r"^(?:(?:png|jpe?g|gif|bmp|tiff?|webp|heic) image"
-    r"|img-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$",
-    re.I,
-)
-IMAGE_EXT = tuple(
-    f".{ext}"
-    for ext in "png jpg jpeg gif bmp tif tiff webp heic svg ai psd eps".split()
-)
-
-
-def is_image(att: dict[str, Any]) -> bool:
-    """Whether an attachment entry is an image, by its type, name, or extension."""
-    name = str(att.get("name") or "").strip()
-    return (
-        str(att.get("contentType") or "").lower().startswith("image/")
-        or bool(IMAGE_NAME.match(name))
-        or name.lower().endswith(IMAGE_EXT)
-    )
-
-
-def uri_path(uri: str) -> str:
-    """A resource uri without its query, percent-decoded, for matching."""
-    return unquote(uri.split("?", 1)[0])
 
 
 def _captured_at(path: Path) -> datetime:
@@ -238,8 +203,8 @@ def _blocks(response: Any, copy: Path) -> list[Any] | None:
     blocks: list[Any] = []
     for block in response:
         text = block.get("text") if isinstance(block, dict) else None
-        if text is None:
-            continue
+        if not isinstance(text, str):
+            return None
         try:
             blocks.append(json.loads(text))
         except ValueError:
@@ -253,9 +218,11 @@ def read_capture(path: Path) -> Capture | None:
         data = json.loads(path.read_text(encoding="utf-8"))
     except ValueError:
         return None
-    if not isinstance(data, dict) or "tool_input" not in data:
+    if not isinstance(data, dict) or not isinstance(data.get("tool_input"), dict):
         return None
     name = data.get("tool_name", "")
+    if not isinstance(name, str):
+        return None
     if name.endswith("outlook_email_search"):
         tool = "search"
     elif name.endswith("read_resource"):
@@ -341,7 +308,7 @@ def import_captures(
     capture of the same copy, is rewritten from the capture instead (the
     one-time repair of model-typed files).
     """
-    mailbox = (mailbox or config.mailbox()).lower()
+    mailbox = (mailbox or config.archive_mailbox()).lower()
     done = Imported()
     # One capture per call: the first that kept its output, else the first. A
     # second hook may not keep a spilled result's copy, so its capture of a
@@ -402,8 +369,9 @@ def import_captures(
         [*store.load_messages(root).values(), *(m for _, m in messages.values())]
     )
     for c in reads:
+        key = attachment_id(c.args["uri"])
         slot = slots.get(uri_path(c.args["uri"])) or slots.get(
-            _attachment_id(c.args["uri"]) or ""
+            _attachment_slot_key(key) if key else ""
         )
         if slot is None:
             done.attachments_unmatched.append(c.path)
@@ -439,8 +407,7 @@ def _differing(message: dict[str, Any], root: Path | None) -> list[str]:
     None when there is no stored copy to compare, or it is not JSON: the
     capture is still listed, with no field named.
     """
-    key = store.id_hash(message["internetMessageId"])
-    path = (store.archive_root() if root is None else root) / "messages" / f"{key}.json"
+    path = store.message_path(message["internetMessageId"], root)
     if not path.exists():
         return []
     try:
@@ -487,12 +454,16 @@ def _is_connector_note(c: Capture) -> bool:
     )
 
 
+def _attachment_slot_key(key: str) -> str:
+    return f"attachment:{key}"
+
+
 def _attachment_slots(
     messages: Iterable[dict[str, Any]],
 ) -> dict[str, tuple[dict[str, Any], int]]:
     """Each attachment uri -> (its message, its position from 1).
 
-    Also keyed by the attachment id alone (``_attachment_id``): the listed uri
+    Also keyed by the attachment id alone (``attachment_id``): the listed uri
     can carry the attachment id in its message segment too, so a reader that
     rebuilt the uri from the message's own id reads the same attachment by a
     different path.
@@ -502,12 +473,6 @@ def _attachment_slots(
         for n, att in enumerate(message.get("attachments") or [], start=1):
             if att.get("uri"):
                 slots[uri_path(att["uri"])] = (message, n)
-                if key := _attachment_id(att["uri"]):
-                    slots.setdefault(key, (message, n))
+                if key := attachment_id(att["uri"]):
+                    slots.setdefault(_attachment_slot_key(key), (message, n))
     return slots
-
-
-def _attachment_id(uri: str) -> str | None:
-    """The decoded attachment id of an attachment uri, as a slot key."""
-    _, sep, rest = uri_path(uri).partition("/attachments/")
-    return f"attachment:{rest}" if sep and rest else None

@@ -227,10 +227,6 @@ def _wiring(settings: dict[str, Any]) -> list[str]:
     ]
 
 
-def _wired(settings: dict[str, Any]) -> bool:
-    return bool(_wiring(settings))
-
-
 # Matchers that run their hooks on every tool: a hook under one is there for
 # every call (a logger, a notifier), so it is a duplicate only when its command
 # writes to the captures directory.
@@ -328,7 +324,7 @@ def settings_state(root: Path) -> str:
     ``ValueError`` when the settings file does not parse, or holds something
     other than hook entries where they belong.
     """
-    return "ok" if _wired(_read_settings(root)) else "missing"
+    return "ok" if _wiring(_read_settings(root)) else "missing"
 
 
 def status(root: Path, start: Path | None = None) -> Status:

@@ -55,11 +55,11 @@ __all__ = [
     "ConfigError",
     "Settings",
     "archive_dir",
+    "archive_mailbox",
     "captured_dir",
     "is_notice_sender",
     "is_system_sender",
     "load",
-    "mailbox",
     "scratch_dir",
     "settings",
     "zone",
@@ -221,7 +221,7 @@ def _settings(cwd: Path, env: tuple[tuple[str, str], ...]) -> Settings:
     return load(cwd)
 
 
-def mailbox() -> str:
+def archive_mailbox() -> str:
     """The address the archive files under; refuses when there is none.
 
     The configured ``mailbox``, or, for the signed-in account's own mailbox

@@ -26,12 +26,12 @@ changelog under *Changed*.
 | `weblink` | the message's `webLink` | no | no |
 | `attachments` | the attachments' names, a list | no | no |
 | `summary` | the start of the body as plain text | no | no |
-| `system` | `true` when the sender is one of `system_senders` or `notice_senders`, and not one of `own_addresses` | yes | no |
+| `automated` | `true` when the sender is one of `system_senders` or `notice_senders`, and not one of `own_addresses` | yes | no |
 | `source` | `archive`, in a file the split wrote; a reader writes none | no | no |
 
 `check` finds the archived message from `internet_message_id` and compares
 `date_local` with the date the archive's `receivedDateTime` implies. It
-prints `direction`, `system`, and `subject` as it found them, and decides
+prints `direction`, `automated`, and `subject` as it found them, and decides
 nothing from them.
 
 ## What `check` reports

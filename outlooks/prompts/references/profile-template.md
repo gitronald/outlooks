@@ -15,9 +15,9 @@ added or renumbered. A number does not.
 Write it against the seven headings below, in this order. Each heading lists
 what the profile must answer. Say "none" where a heading does not apply
 (a repo that never files anything has no filing step), so an agent can tell
-a deliberate absence from a gap. Keep real names, addresses, and precedents
-here rather than in the skill: the profile is where a repo's own history
-belongs.
+a deliberate absence from an oversight. Keep real names, addresses, and
+precedents here rather than in the skill: the profile is where a repo's own
+history belongs.
 
 ## 1. Who we are
 

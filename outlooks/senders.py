@@ -22,7 +22,7 @@ from datetime import date
 from typing import Any
 
 from outlooks import config, store
-from outlooks.coverage import parse_ts
+from outlooks.timestamps import parse_ts
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ without the caller having to know the connector's JSON shape.
 The body comes back as **text**, never HTML: the archive holds an unknown
 sender's markup, and a page that pasted it into its own DOM would run their
 scripts and load their tracking pixels. The gateway banner and the URL-defense
-wrappers are cut first (``render.clean_body``), so what is left is the message
+wrappers are cut first (``gateway.clean_body``), so what is left is the message
 as it was written, quoted chain included — that chain is often the only record
 of a thread whose earlier messages were never archived.
 """
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from outlooks import store
-from outlooks.render import clean_body, unwrap_text_links
+from outlooks.gateway import clean_body, unwrap_text_links
 
 # The names a consuming repo may import; a change to one is a changelog entry.
 __all__ = [

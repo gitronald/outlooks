@@ -62,13 +62,13 @@ Your worklist file lists lines `NAME-NN <uri>`. For each line:
      (list of names);
    - `summary`: the first 600 characters of the body as plain text, quoted
      reply chain excluded;
-   - `system`: true when the sender is one of `system_senders` or
+   - `automated`: true when the sender is one of `system_senders` or
      `notice_senders`, and is not one of `own_addresses`.
 
 Rules: any Python you run is `uv run python`, never bare `python3`. Write
 nothing under the archive, and do not run `{cli} import` or `{cli} save`;
 never touch the ledger or any of the repo's records. Your timeline file is a
-report, not a decision: `direction` and `system` are the only judgments you
+report, not a decision: `direction` and `automated` are the only judgments you
 make.
 
 Return only: for each NAME-NN, the file path from its timeline, date_local,

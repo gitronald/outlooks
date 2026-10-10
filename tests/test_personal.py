@@ -88,13 +88,13 @@ def total(n):
 
 def test_the_archive_files_under_the_first_own_address(personal, monkeypatch):
     assert config.settings().mailbox is None
-    assert config.mailbox() == ME
+    assert config.archive_mailbox() == ME
     assert ("mailbox", f"(unset: the signed-in account, archived as {ME})") in [
         (key, value) for key, value, _ in config.describe()
     ]
     monkeypatch.delenv("OUTLOOKS_OWN_ADDRESSES")
     with pytest.raises(config.ConfigError, match="own_addresses"):
-        config.mailbox()
+        config.archive_mailbox()
 
 
 def test_import_files_a_pull_that_names_no_mailbox(personal, tmp_path):
@@ -104,12 +104,12 @@ def test_import_files_a_pull_that_names_no_mailbox(personal, tmp_path):
         folder, "20260913T100100", READ, {"uri": "mail:///messages/ID1"}, message(1)
     )
     captures, _ = cp.load_captures([folder])
-    assert [c.mailbox for c in captures] == [None, None]
+    assert [c.owner for c in captures] == [None, None]
 
     done = cp.import_captures(captures)
     assert (done.hits_added, done.messages_written, done.other_mailbox) == (2, 1, 0)
     assert {h["mailbox"] for h in store.load_hits().values()} == {ME}
-    [w] = cv.windows(captures, config.mailbox())
+    [w] = cv.windows(captures, config.archive_mailbox())
     assert w.complete and w.mailbox == ME
     [row] = cv.record([w])
     assert (row["mailbox"], row["total"]) == (ME, "2")
@@ -136,7 +136,7 @@ def test_an_empty_pull_that_names_no_mailbox_is_covered(personal, tmp_path):
     folder = tmp_path / "captured"
     write_capture(folder, "20260913T100000", SEARCH, WINDOW)
     captures, _ = cp.load_captures([folder])
-    [w] = cv.windows(captures, config.mailbox())
+    [w] = cv.windows(captures, config.archive_mailbox())
     assert w.complete and w.total == 0
 
 
@@ -148,7 +148,7 @@ def test_a_configured_mailbox_takes_no_capture_that_names_none(tmp_path):
     captures, _ = cp.load_captures([folder])
     done = cp.import_captures(captures)
     assert (done.hits_added, done.other_mailbox) == (0, 1)
-    assert cv.windows(captures, config.mailbox()) == []
+    assert cv.windows(captures, config.archive_mailbox()) == []
 
 
 def test_the_commands_run_with_no_mailbox_configured(personal, tmp_path):

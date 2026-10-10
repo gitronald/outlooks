@@ -4,7 +4,7 @@ import json
 
 from outlooks import capture as cp
 from outlooks import sizing as sz
-from outlooks.coverage import parse_ts
+from outlooks.timestamps import parse_ts
 
 BOX = "box@example.org"
 SEARCH = "mcp__claude_ai_Microsoft_365__outlook_email_search"

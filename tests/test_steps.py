@@ -25,7 +25,7 @@ STEPS = {
         (1, "sweep"),
         (2, "classify"),
         (3, "match"),
-        (4, "worklist"),
+        (4, "approval"),
         (5, "file"),
         (6, "ledger"),
         (7, "report"),
@@ -34,7 +34,7 @@ STEPS = {
         (0, "setup"),
         (1, "resolve"),
         (2, "pull"),
-        (3, "gaps"),
+        (3, "widen"),
         (4, "timeline"),
         # Running a lookup through subagents
         (1, "search"),
