@@ -38,6 +38,8 @@ what a consuming repo has to do about it:
 
 ### Changed
 
+- outlooks now needs Python 3.12 or later. Python 3.11 is no longer
+  supported or tested.
 - The bulk reader brief opens with its two rules (one call at a time, never
   retype a uri), lists the NAMEs with `cut` rather than `cat`ting the
   worklist, and puts any notes below a `---` line after the status lines.
