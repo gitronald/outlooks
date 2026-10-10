@@ -103,4 +103,4 @@ not allowed to change. Each needs a decision before any change.
    intervals are half-open; both are called windows.
 6. `outlooks doctor` does not parse message files.
 
-Not verified: tests ran on Python 3.14 only; CI runs the 3.12-3.14 matrix.
+CI passed on Python 3.12, 3.13, and 3.14 for PR #9.
