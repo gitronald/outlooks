@@ -302,6 +302,77 @@ def test_audit_counts_a_calendar_invite_but_never_lists_it(ctype):
     assert result.untried == []
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["PNG image", "JPEG image", "img-3f2a9c1e-77b0-4c1d-9e1a-0d5b6c7e8f90", "x.ai"],
+)
+def test_audit_skips_an_image_sent_as_octet_stream(name):
+    # The connector sends some images as octet-stream under a placeholder
+    # name; only a read would show they are images, so the sweep never lists
+    # them, and a text file in their slot is reported like any image's.
+    image = {
+        "name": name,
+        "contentType": "application/octet-stream",
+        "uri": f"mail:///messages/M1%3D/attachments/A1?owner={BOX}",
+    }
+    m1 = {**message(1, [image]), "receivedDateTime": "2026-03-15T00:00:00.000Z"}
+    store.save_message(m1)
+    result = wl.audit("2026-03")
+    assert result.counts["text-bearing"] == 0
+    assert (result.missing, result.listed, result.untried) == ({}, [], [])
+
+    key = store.id_hash(m1["internetMessageId"])
+    (store.archive_root() / "messages" / f"{key}.1.txt").write_text("x", "utf-8")
+    assert wl.audit("2026-03").image_slots == [f"{key}.1"]
+
+
+@pytest.mark.parametrize(
+    "ctype", ["application/pdf", "application/octet-stream", "text/calendar"]
+)
+def test_audit_counts_a_binary_note_apart_from_missing(ctype):
+    # A read that got the connector's binary note gets it again on a re-read,
+    # so the attachment is counted as binary, never listed as missing.
+    owner = f"?owner={BOX}"
+    report = {
+        "name": "report.pdf",
+        "contentType": ctype,
+        "uri": f"mail:///messages/M1%3D/attachments/A1%3D{owner}",
+    }
+    store.save_message(
+        {**message(1, [report]), "receivedDateTime": "2026-03-15T00:00:00.000Z"}
+    )
+    note = {
+        "note": "Binary attachment; content is not available as text.",
+        "attachment": {"name": "report.pdf", "contentType": ctype},
+    }
+    write_capture(
+        "20260901T090000",
+        READ,
+        {"uri": f"mail:///messages/M1%3D/attachments/A1%3D{owner}"},
+        note,
+    )
+    result = wl.audit("2026-03")
+    assert result.binary == {ctype: 1}
+    assert (result.missing, result.listed, result.untried) == ({}, [], [])
+
+
+def test_binary_ids_ignores_a_read_that_returned_text():
+    owner = f"?owner={BOX}"
+    write_capture(
+        "20260901T090000",
+        READ,
+        {"uri": f"mail:///messages/M1%3D/attachments/A1{owner}"},
+        "the letter",
+    )
+    write_capture(
+        "20260901T090001",
+        READ,
+        {"uri": f"mail:///messages/M1%3D/attachments/A2{owner}"},
+        "Binary attachment",
+    )
+    assert wl.binary_ids() == {"A2"}
+
+
 # --- the quiet period ------------------------------------------------------------
 
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -22,7 +23,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from outlooks import config, store
-from outlooks.capture import Capture, captured_dir, load_captures
+from outlooks.capture import Capture, captured_dir, is_image, load_captures
 from outlooks.coverage import (
     Window,
     is_window,
@@ -37,6 +38,8 @@ from outlooks.coverage import (
 CALENDAR = ("text/calendar", "application/ics")
 NO_TEXT = ("message/rfc822", "application/zip", "multipart/signed", *CALENDAR)
 ATTACHMENT_ID = re.compile(r"/attachments/([^?]+)")
+# What the connector returns, lowercased, for an attachment it has no text for.
+BINARY_NOTE = "binary attachment"
 # How long the connector must have been quiet before worklists are rebuilt.
 QUIET = timedelta(seconds=90)
 
@@ -197,9 +200,8 @@ def read_worklist(
     return result
 
 
-def attempted_ids(folder: Path | None = None) -> set[str]:
-    """Attachment ids any captured ``read_resource`` call asked for."""
-    ids: set[str] = set()
+def _attachment_reads(folder: Path | None) -> Iterator[tuple[str, Any]]:
+    """(attachment id, tool_response) for each captured attachment read."""
     for path in (folder or captured_dir()).glob("*.json"):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -208,14 +210,31 @@ def attempted_ids(folder: Path | None = None) -> set[str]:
             continue
         match = ATTACHMENT_ID.search(uri or "")
         if match:
-            ids.add(unquote(match.group(1)))
-    return ids
+            yield unquote(match.group(1)), payload.get("tool_response")
+
+
+def attempted_ids(folder: Path | None = None) -> set[str]:
+    """Attachment ids any captured ``read_resource`` call asked for."""
+    return {att_id for att_id, _ in _attachment_reads(folder)}
+
+
+def binary_ids(folder: Path | None = None) -> set[str]:
+    """Attachment ids a captured read got the connector's binary note for.
+
+    A re-read returns the same note, so such an attachment never gets text.
+    """
+    return {
+        att_id
+        for att_id, response in _attachment_reads(folder)
+        if BINARY_NOTE in json.dumps(response).lower()
+    }
 
 
 @dataclass
 class Audit:
     counts: Counter[str] = field(default_factory=Counter)
     missing: Counter[str] = field(default_factory=Counter)
+    binary: Counter[str] = field(default_factory=Counter)
     listed: list[str] = field(default_factory=list)
     untried: list[tuple[str, str, str]] = field(default_factory=list)
     image_slots: list[str] = field(default_factory=list)
@@ -225,16 +244,20 @@ class Audit:
 def audit(prefix: str, *, archive: Path | None = None) -> Audit:
     """Attachment texts for the archived messages received in ``prefix``.
 
-    Counts the text-bearing attachments (not inline, not ``image/*``) and how
-    many have their ``{id-hash}.{n}.txt``. A missing one that is not an attached
-    email, a zip, an S/MIME signature, or a calendar invite is listed by name,
-    since those are the ones a re-read might fill; one no capture ever tried to
-    read (signatures and invites aside) is a reader's skip, not the connector's
-    refusal. Also lists a text
-    file sitting in an image's slot and any message file that does not parse.
+    Counts the text-bearing attachments (not inline, not an image by
+    :func:`~outlooks.capture.is_image`) and how many have their
+    ``{id-hash}.{n}.txt``. One without text that a read got the connector's
+    binary note for is counted under ``binary``, by type, and not as missing: a
+    re-read returns the same note. Any other missing one that is not an
+    attached email, a zip, an S/MIME signature, or a calendar invite is listed
+    by name, since those are the ones a re-read might fill; one no capture ever
+    tried to read (signatures and invites aside) is a reader's skip, not the
+    connector's refusal. Also lists a text file sitting in an image's slot and
+    any message file that does not parse.
     """
     messages = (archive or store.archive_root()) / "messages"
     tried = attempted_ids()
+    binary = binary_ids()
     result = Audit()
     for path in sorted(messages.glob("*.json")):
         try:
@@ -248,7 +271,7 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
         for n, att in enumerate(message.get("attachments") or [], 1):
             ctype = str(att.get("contentType", ""))
             has_text = (messages / f"{path.stem}.{n}.txt").exists()
-            if att.get("isInline") or ctype.startswith("image/"):
+            if att.get("isInline") or is_image(att):
                 if has_text:
                     result.image_slots.append(f"{path.stem}.{n}")
                 continue
@@ -256,12 +279,14 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
             if has_text:
                 result.counts["with text"] += 1
                 continue
+            match = ATTACHMENT_ID.search(att.get("uri") or "")
+            att_id = unquote(match.group(1)) if match else None
+            if att_id in binary:
+                result.binary[ctype or "?"] += 1
+                continue
             result.missing[ctype or "?"] += 1
             if ctype not in NO_TEXT:
                 result.listed.append(f"{path.stem}.{n}  {ctype}  {att.get('name')}")
-            match = ATTACHMENT_ID.search(att.get("uri") or "")
-            if ctype not in ("multipart/signed", *CALENDAR) and not (
-                match and unquote(match.group(1)) in tried
-            ):
+            if ctype not in ("multipart/signed", *CALENDAR) and att_id not in tried:
                 result.untried.append((f"{path.stem}.{n}", ctype, att.get("uri")))
     return result

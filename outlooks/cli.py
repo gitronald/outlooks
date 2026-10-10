@@ -489,6 +489,7 @@ def audit(
     result = wl.audit(prefix)
     typer.echo(str(dict(result.counts)))
     typer.echo(f"missing by type: {dict(result.missing)}")
+    typer.echo(f"binary (no text to read) by type: {dict(result.binary)}")
     for line in result.listed:
         typer.echo(f"  MISSING {line}")
     typer.echo(f"never attempted: {len(result.untried)}")

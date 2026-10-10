@@ -474,12 +474,23 @@ def test_a_reread_differing_only_in_line_endings_is_unchanged(tmp_path):
     assert (root / "messages" / f"{key}.1.txt").read_text() == "line one\nline two\n"
 
 
-def test_an_image_attachment_read_is_refused(tmp_path):
+@pytest.mark.parametrize(
+    ("name", "ctype"),
+    [
+        ("image.png", "image/png"),
+        # Images the connector sends as octet-stream, under a placeholder name
+        # or an image or design file's extension.
+        ("PNG image", "application/octet-stream"),
+        ("img-3f2a9c1e-77b0-4c1d-9e1a-0d5b6c7e8f90", "application/octet-stream"),
+        ("banner.psd", "application/octet-stream"),
+    ],
+)
+def test_an_image_attachment_read_is_refused(tmp_path, name, ctype):
     root = tmp_path / "archive"
     base = "mail:///messages/ID1a%3D/attachments/"
     owner = f"?owner={BOX}"
     atts = [
-        {"uri": base + "A1" + owner, "name": "image.png", "contentType": "image/png"},
+        {"uri": base + "A1" + owner, "name": name, "contentType": ctype},
         {"uri": base + "A2" + owner, "name": "letter.docx"},
     ]
     folder = tmp_path / "c"
