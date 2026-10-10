@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfoNotFoundError
 import pkgskills
 from pkgskills.stamp import PREFIX
 
-from outlooks import config, coverage, hook
+from outlooks import config, coverage, hook, store
 from outlooks.host import HOST
 from outlooks.timestamps import parse_ts
 
@@ -121,7 +121,29 @@ def _archive(start: Path) -> str:
         except (ValueError, TypeError, KeyError, OSError) as e:
             what = f"no {e}" if isinstance(e, KeyError) else str(e)
             raise _Failed(f"{path}, line {n}: {what}") from None
-    return f"{root}: {len(files)} hits files, {rows} coverage rows"
+    messages = sorted((root / "messages").glob("*.json"))
+    for path in messages:
+        try:
+            message = json.loads(path.read_text("utf-8"))
+            if not isinstance(message, dict):
+                raise ValueError("not an object")
+            mid = message["internetMessageId"]
+            if not isinstance(mid, str):
+                raise ValueError("internetMessageId is not a string")
+            if not mid:
+                raise ValueError("an empty internetMessageId")
+            expected = store.id_hash(mid)
+            if path.stem != expected:
+                raise ValueError(
+                    f"file stem does not match internetMessageId hash {expected}"
+                )
+        except (ValueError, TypeError, KeyError, OSError) as e:
+            what = f"no {e}" if isinstance(e, KeyError) else str(e)
+            raise _Failed(f"{path}: {what}") from None
+    return (
+        f"{root}: {len(files)} hits files, {len(messages)} message files, "
+        f"{rows} coverage rows"
+    )
 
 
 def _hook_script(root: Path, start: Path) -> str:

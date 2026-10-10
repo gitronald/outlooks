@@ -43,6 +43,7 @@ def repo(tmp_path, monkeypatch):
     hk.apply(tmp_path)
     pkgskills.install(HOST, tmp_path, "local")
     store.save_hits([hit(1), hit(2)], "desk@example.org")
+    store.save_message({**hit(1), "sender": {"emailAddress": {}}, "body": {}})
     (tmp_path / "data" / "outlook" / "coverage.csv").write_text(
         "mailbox,after,before,total,messages,pulled\n"
         "desk@example.org,2026-03-10T07:00:00Z,2026-03-12T07:00:00Z,2,2,"
@@ -68,7 +69,7 @@ def test_a_wired_repo_passes_every_check_and_nothing_is_written(repo):
     assert files(repo) == before
     notes = {r.check: r.note for r in results}
     assert notes["profile"] == "(unset)"
-    assert notes["archive"].endswith("1 hits files, 1 coverage rows")
+    assert notes["archive"].endswith("1 hits files, 1 message files, 1 coverage rows")
 
 
 def test_cli_doctor_prints_one_line_per_check_and_exits_zero(repo):
@@ -277,3 +278,43 @@ def test_skill_stub_note_names_the_release_that_stamped_it(repo):
         f"content current for outlooks {version}, stamped by 0.0.1; "
         "`uv run outlooks install` restamps it"
     )
+
+
+@pytest.mark.parametrize(
+    ("content", "why"),
+    [
+        ("{not json", "Expecting property name"),
+        ("[]", "not an object"),
+        ("null", "not an object"),
+        ("{}", "no 'internetMessageId'"),
+        ('{"internetMessageId": ""}', "an empty internetMessageId"),
+        ('{"internetMessageId": null}', "internetMessageId is not a string"),
+        ('{"internetMessageId": 123}', "internetMessageId is not a string"),
+        ('{"internetMessageId": []}', "internetMessageId is not a string"),
+    ],
+)
+def test_archive_fails_on_an_invalid_message(repo, content, why):
+    path = store.message_path(hit(1)["internetMessageId"])
+    path.write_text(content, encoding="utf-8")
+    note = failed(dr.run())["archive"]
+    assert note.startswith(f"{path}: ") and why in note
+
+
+def test_archive_fails_on_a_message_under_the_wrong_hash(repo):
+    path = store.message_path(hit(1)["internetMessageId"])
+    wrong = path.with_name("wrong.json")
+    path.rename(wrong)
+    note = failed(dr.run())["archive"]
+    assert (
+        note == f"{wrong}: file stem does not match internetMessageId hash {path.stem}"
+    )
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 1
+    assert "archive              FAIL" in result.output and str(wrong) in result.output
+
+
+def test_archive_reports_the_first_bad_message_in_filename_order(repo):
+    folder = store.message_path(hit(1)["internetMessageId"]).parent
+    for name in ("z.json", "a.json"):
+        (folder / name).write_text("[]", encoding="utf-8")
+    assert failed(dr.run())["archive"] == f"{folder / 'a.json'}: not an object"
