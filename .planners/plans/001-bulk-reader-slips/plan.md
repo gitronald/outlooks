@@ -1,7 +1,7 @@
 ---
 id: 1
 slug: bulk-reader-slips
-status: active
+status: implemented
 branch: feature/bulk-reader-slips
 created: 2026-10-10T00:34:31-07:00
 concluded:
@@ -174,6 +174,7 @@ might fix", or "never tried".
     missing and nothing untried.
   - Not covered: an octet-stream image (the run's mail had none), and a
     throttled round.
+- **2026-10-10T11:21:37-07:00** — Implemented: 9 commits ahead of `dev`.
 
 ## Handoff
 
