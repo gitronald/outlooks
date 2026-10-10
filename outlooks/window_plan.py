@@ -28,7 +28,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from outlooks import config
-from outlooks.coverage import Bounds, fmt_ts, merge, parse_ts
+from outlooks.coverage import Bounds, merge
+from outlooks.timestamps import fmt_ts, parse_ts
 
 LIMIT = 175  # above this a window risks the connector's per-window offset ceiling
 DAY_TARGET = 150  # messages aimed for per day-split piece, with headroom under LIMIT
@@ -304,14 +305,17 @@ def load(folder: Path) -> Plan:
     path = folder / "windows.json"
     if not path.is_file():
         raise PlanError(f"no plan at {path}: start one with `windows init`")
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return Plan(
-        mailbox=data["mailbox"],
-        after=parse_ts(data["after"]),
-        before=parse_ts(data["before"]),
-        total=data["total"],
-        pieces=[
-            Piece(parse_ts(p["after"]), parse_ts(p["before"]), p["total"])
-            for p in data["pieces"]
-        ],
-    )
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return Plan(
+            mailbox=data["mailbox"],
+            after=parse_ts(data["after"]),
+            before=parse_ts(data["before"]),
+            total=data["total"],
+            pieces=[
+                Piece(parse_ts(p["after"]), parse_ts(p["before"]), p["total"])
+                for p in data["pieces"]
+            ],
+        )
+    except (ValueError, TypeError, KeyError) as e:
+        raise PlanError(f"{path} does not parse ({e!r}); fix or remove it") from None

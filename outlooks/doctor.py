@@ -27,6 +27,7 @@ from pkgskills.stamp import PREFIX
 
 from outlooks import config, coverage, hook
 from outlooks.host import HOST
+from outlooks.timestamps import parse_ts
 
 # The checks, in the order they are printed.
 CHECKS = (
@@ -96,8 +97,8 @@ def _archive(start: Path) -> str:
                     if None in row or None in row.values():
                         cells = len(coverage.FIELDS)
                         raise ValueError(f"it does not have the header's {cells} cells")
-                    coverage.parse_ts(row["after"])
-                    coverage.parse_ts(row["before"])
+                    parse_ts(row["after"])
+                    parse_ts(row["before"])
                     int(row["total"])
                     int(row["messages"])
         except (ValueError, TypeError, KeyError, OSError) as e:
@@ -114,7 +115,7 @@ def _archive(start: Path) -> str:
                     raise ValueError("not an object")
                 if not isinstance(hit["receivedDateTime"], str):
                     raise ValueError("receivedDateTime is not a string")
-                coverage.parse_ts(hit["receivedDateTime"])
+                parse_ts(hit["receivedDateTime"])
                 if not hit["internetMessageId"]:
                     raise ValueError("an empty internetMessageId")
         except (ValueError, TypeError, KeyError, OSError) as e:

@@ -9,15 +9,15 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from outlooks import coverage as cv
 from outlooks import window_plan as wp
+from outlooks.timestamps import fmt_ts
 
 MAILBOX = "box@example.org"
 PACIFIC = ZoneInfo("America/Los_Angeles")  # the zone [tool.outlooks] sets here
 
 
 def row(mailbox: str, after: datetime, before: datetime) -> dict[str, str]:
-    return {"mailbox": mailbox, "after": cv.fmt_ts(after), "before": cv.fmt_ts(before)}
+    return {"mailbox": mailbox, "after": fmt_ts(after), "before": fmt_ts(before)}
 
 
 # --- parse_bound ------------------------------------------------------------
@@ -334,7 +334,7 @@ def test_write_batches_removes_stale_pager_files(tmp_path):
     assert written == [tmp_path / "pager-01.txt"]
     assert not (tmp_path / "pager-02.txt").exists()
     assert (tmp_path / "pager-01.txt").read_text(encoding="utf-8") == (
-        f"{cv.fmt_ts(a)} {cv.fmt_ts(b)} 30\n"
+        f"{fmt_ts(a)} {fmt_ts(b)} 30\n"
     )
 
 
@@ -361,4 +361,13 @@ def test_parse_bound_rejects_a_malformed_bound(value):
 
 def test_load_refuses_a_folder_with_no_plan(tmp_path):
     with pytest.raises(wp.PlanError, match="start one with `windows init`"):
+        wp.load(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "content", ["{not json", "[]", '{"mailbox": "desk@example.org"}']
+)
+def test_load_refuses_a_state_file_that_does_not_parse(tmp_path, content):
+    (tmp_path / "windows.json").write_text(content, encoding="utf-8")
+    with pytest.raises(wp.PlanError, match="does not parse"):
         wp.load(tmp_path)
