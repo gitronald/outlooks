@@ -57,3 +57,48 @@ main session verifying and committing.
   - Base: `dev` at `0d75e8d`
   - Worktree: `.worktrees/package-review-simplification`
   - PR: pending
+- **2026-10-10T12:04:05-07:00** — Codex drafted, the main session verified
+  and committed.
+  - Pass 1 (one brief, about 20 minutes): an ontology inventory, 8 internal
+    moves and renames, 9 bug fixes each with a test that failed first, one
+    inlined wrapper, and 14 findings reported without change. The brief's
+    frozen-interface list held: `test_contract.py` passed unmodified, and no
+    output line, setting, or on-disk format changed.
+  - The review caught what the brief's failure-mode list predicted, in new
+    forms: a re-export alias (`decode_v3 as decode_v3`) kept so old test
+    imports still resolved; the gateway decoding moved into the public
+    `detail` module, which does not own it; the homonym `is_system` moved but
+    not renamed; `lookup._ts` left beside `parse_ts`, and reading a naive
+    `received_utc` in the machine zone; the message path rebuilt by hand in
+    five places; and `capture.captured_dir` left as a pure alias.
+  - Pass 2 (a numbered list of those seven) fixed every one, with no third
+    pass needed. The main session then fixed two crashes pass 1 had only
+    reported (`--per 0` removing batches before failing, a corrupt
+    `windows.json` raising a traceback) and moved `cli.py`'s remaining
+    `cv.fmt_ts` calls to `timestamps`.
+  - New internal modules: `gateway` (URL-defense and banner removal),
+    `attachments` (image kind and attachment id), `timestamps` (UTC parse and
+    format). New internal helpers: `store.message_path`,
+    `classify.direction` and `classify.is_automated` (moved from `lookup`).
+  - 443 tests at the start, 470 at the end; ruff and pyrefly strict clean.
+
+## Handoff
+
+The pass is committed on `feature/package-review-simplification`. What is
+left is the findings that touch the declared interface, which this plan was
+not allowed to change. Each needs a decision before any change.
+
+1. `store.archive_root()` and `config.archive_dir()` are two public names for
+   one location.
+2. "mailbox" means three things: the configured connector owner, the address
+   the archive files under, and the owner a capture names.
+3. "worklist" means both the sweep's approval list and a reader's uri list;
+   "gap" means both an uncovered interval (coverage) and missing
+   correspondence (the lookup skill's step).
+4. A timeline file's `system` key covers notice senders too, while
+   `config.is_system_sender` excludes them.
+5. Window bounds from the connector are inclusive on both ends; coverage
+   intervals are half-open; both are called windows.
+6. `outlooks doctor` does not parse message files.
+
+Not verified: tests ran on Python 3.14 only; CI runs the 3.12-3.14 matrix.
