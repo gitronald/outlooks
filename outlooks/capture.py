@@ -134,9 +134,13 @@ def _is_message(block: dict[str, Any]) -> bool:
 
 # The connector sends some images as ``application/octet-stream`` under a
 # placeholder name (``PNG image``, ``img-<uuid>``), so the content type alone
-# misses them. Design files carry no text worth reading either.
+# misses them. Design files carry no text worth reading either. Only a whole
+# uuid follows ``img-``, so a document named ``img-1234abcd-report.pdf`` is not
+# taken for one.
 IMAGE_NAME = re.compile(
-    r"^(?:(?:png|jpe?g|gif|bmp|tiff?|webp|heic) image|img-[0-9a-f-]{8,}.*)$", re.I
+    r"^(?:(?:png|jpe?g|gif|bmp|tiff?|webp|heic) image"
+    r"|img-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$",
+    re.I,
 )
 IMAGE_EXT = tuple(
     f".{ext}"

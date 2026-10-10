@@ -516,6 +516,22 @@ def test_an_image_attachment_read_is_refused(tmp_path, name, ctype):
     assert (root / "messages" / f"{key}.2.txt").read_text() == "the letter"
 
 
+@pytest.mark.parametrize(
+    ("name", "image"),
+    [
+        ("img-3f2a9c1e-77b0-4c1d-9e1a-0d5b6c7e8f90", True),
+        ("IMG-3F2A9C1E-77B0-4C1D-9E1A-0D5B6C7E8F90", True),
+        ("img-3f2a9c1e-77b0-4c1d-9e1a-0d5b6c7e8f90.png", True),
+        # A document whose name merely starts like a placeholder.
+        ("img-deadbeef-report.docx", False),
+        ("img-3f2a9c1e-77b0-4c1d-9e1a-0d5b6c7e8f90 contract.pdf", False),
+        ("PNG image.pdf", False),
+    ],
+)
+def test_is_image_takes_only_a_whole_placeholder_name(name, image):
+    assert cp.is_image({"name": name, "contentType": "application/pdf"}) is image
+
+
 def test_a_connector_note_on_an_attached_item_is_refused(tmp_path):
     root = tmp_path / "archive"
     base = "mail:///messages/ID1a%3D/attachments/"
