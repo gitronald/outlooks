@@ -110,14 +110,12 @@ main session verifying and committing.
 - **2026-10-10T12:32:02-07:00** — Implemented: 13 commits ahead of `dev`.
 - **2026-10-10T12:49:26-07:00** — Reactivated: back to active after review.
 
+- **2026-10-10T12:50:04-07:00** — Question 7 answered: the owner renamed the `classify`
+  role `system` to `automated`, matching the timeline key. `senders` keeps
+  its `system` mark, which names `system_senders` membership, not the role.
+
 ## Handoff
 
 All work for this plan is committed on
-`feature/package-review-simplification` (PR #9). The six interface findings
-from the first pass are settled (see the Log entry of 12:31).
-
-Open question 7 (raised 2026-10-10): the `classify` role `system` covers
-notice senders too (`Facts("system", extra={"notice": True})`), like the
-timeline key now named `automated`. The role names are pinned
-(`tests/test_contract.py` `ROLES`), so this is left as is unless the owner
-wants the role renamed as well.
+`feature/package-review-simplification` (PR #9). Questions 1-7 are settled
+(Log entries of 12:31 and the one above); nothing is open.
