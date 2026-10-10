@@ -9,8 +9,8 @@ message plays.
 Roles: ``arrival`` (a correspondent's first message), ``followup`` (a reply or
 forward from outside), ``ours`` (mail from one of ``own_addresses``),
 ``decision`` (ours, with the configured ``decision_tag`` in the subject), and
-``system`` (mail from one of ``system_senders`` or ``notice_senders``; from
-the second, ``extra["notice"]`` is true). What a system sender's
+``automated`` (mail from one of ``system_senders`` or ``notice_senders``;
+from the second, ``extra["notice"]`` is true). What a system sender's
 notifications say is the repo's own business: the package parses none of it.
 """
 
@@ -84,7 +84,7 @@ class Facts:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
-def body_text(body: dict[str, Any] | None) -> str:
+def _classification_text(body: dict[str, Any] | None) -> str:
     """A message body as plain text (tags dropped, entities decoded)."""
     if not body:
         return ""
@@ -121,7 +121,9 @@ def view(payload: dict[str, Any], mailbox: str | None = None) -> Mail:
         sender_name=(sender.get("name") or "") if isinstance(sender, dict) else "",
         recipients=tuple(r for r in recipients if r),
         subject=payload.get("subject") or "",
-        text=body_text(payload["body"]) if full else payload.get("summary") or "",
+        text=_classification_text(payload["body"])
+        if full
+        else payload.get("summary") or "",
         conversation_id=payload.get("conversationId"),
         has_attachments=bool(payload.get("hasAttachments")),
         full=full,
@@ -165,9 +167,9 @@ def classify(mail: Mail) -> Facts:
     subject = mail.subject
     settings = config.settings()
     if config.is_notice_sender(mail.sender):
-        return Facts("system", extra={"notice": True})
+        return Facts("automated", extra={"notice": True})
     if config.is_system_sender(mail.sender):
-        return Facts("system")
+        return Facts("automated")
     if mail.sender in settings.own_addresses:
         pattern = decision_tag()
         tag = pattern.search(subject) if pattern else None
@@ -178,3 +180,25 @@ def classify(mail: Mail) -> Facts:
     if is_reply(subject):
         return Facts("followup", extra={"auto": is_auto_reply(subject)})
     return Facts("arrival")
+
+
+def is_automated(sender: str) -> bool:
+    """Whether the sender is an automated one, of either list."""
+    return config.is_system_sender(sender) or config.is_notice_sender(sender)
+
+
+def direction(sender: str, to: list[str]) -> str:
+    """``out`` for our own mail and for system mail not sent to us, else ``in``.
+
+    A notice sender's mail is ``in`` whoever it is addressed to: a bounce
+    names the address that failed, and is still a notice to us.
+    """
+    own = config.settings().own_addresses
+    s = sender.lower()
+    if s in own:
+        return "out"
+    if config.is_notice_sender(s):
+        return "in"
+    if config.is_system_sender(s):
+        return "in" if any(t.lower() in own for t in to) else "out"
+    return "in"

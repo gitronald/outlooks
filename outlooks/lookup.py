@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any
 
 from outlooks import config, store
+from outlooks.classify import direction, is_automated
+from outlooks.timestamps import parse_ts
 
 SYSTEM_PAIR_SECONDS = 60
 
@@ -40,54 +42,34 @@ TIMELINE_KEYS = (
     "weblink",
     "attachments",
     "summary",
-    "system",
+    "automated",
     "source",
 )
 # The keys `check` reads, and those of them it cannot do without: the message
 # a file is about, and the local date it claims.
-CHECK_READS = ("internet_message_id", "date_local", "direction", "system", "subject")
+CHECK_READS = (
+    "internet_message_id",
+    "date_local",
+    "direction",
+    "automated",
+    "subject",
+)
 REQUIRED_KEYS = ("internet_message_id", "date_local")
 # The searches whose pages carry their kind in the file name
 # (``{name}-sent-page-{n}.json``); the query search's carry none.
 PAGE_KINDS = ("sender", "title", "sent")
 
 
-def _ts(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
 def local_day(received_utc: str) -> str:
     """A UTC timestamp's date in the configured zone, ``YYYY-MM-DD``."""
-    return _ts(received_utc).astimezone(config.zone()).date().isoformat()
-
-
-def is_system(sender: str) -> bool:
-    """Whether the sender is an automated one, of either list."""
-    return config.is_system_sender(sender) or config.is_notice_sender(sender)
-
-
-def direction(sender: str, to: list[str]) -> str:
-    """``out`` for our own mail and for system mail not sent to us, else ``in``.
-
-    A notice sender's mail is ``in`` whoever it is addressed to: a bounce
-    names the address that failed, and is still a notice to us.
-    """
-    own = config.settings().own_addresses
-    s = sender.lower()
-    if s in own:
-        return "out"
-    if config.is_notice_sender(s):
-        return "in"
-    if config.is_system_sender(s):
-        return "in" if any(t.lower() in own for t in to) else "out"
-    return "in"
+    return parse_ts(received_utc).astimezone(config.zone()).date().isoformat()
 
 
 def timeline_from_archive(path: Path) -> dict[str, Any]:
     """The timeline record a reader would write, taken from an archived message."""
     m = json.loads(path.read_text(encoding="utf-8"))
     sender = (m.get("sender") or {}).get("address", "")
-    to = [r.get("address", "") for r in m.get("toRecipients", [])]
+    to = [r.get("address", "") for r in m.get("toRecipients") or []]
     return {
         "file": str(path),
         "received_utc": m["receivedDateTime"],
@@ -98,9 +80,9 @@ def timeline_from_archive(path: Path) -> dict[str, Any]:
         "subject": m.get("subject", ""),
         "internet_message_id": m["internetMessageId"],
         "weblink": m.get("webLink", ""),
-        "attachments": [a.get("name", "") for a in m.get("attachments", [])],
+        "attachments": [a.get("name", "") for a in m.get("attachments") or []],
         "summary": m.get("bodyPreview", ""),
-        "system": is_system(sender),
+        "automated": is_automated(sender),
         "source": "archive",
     }
 
@@ -134,7 +116,7 @@ def split(
     batches: Path | None = None,
     per: int = 2,
     scratch: Path | None = None,
-    archive: Path | None = None,
+    root: Path | None = None,
 ) -> Split:
     """Merge a lookup's pages, keep the matching hits, and split them.
 
@@ -149,7 +131,7 @@ def split(
     kept too.
     """
     scratch = scratch or config.scratch_dir()
-    archive = archive or store.archive_root()
+    root = root or config.archive_dir()
     own = config.settings().own_addresses
     terms = [t.lower() for t in terms]
     for _, stale in timelines(scratch, name):
@@ -166,7 +148,7 @@ def split(
             if _matches(h, terms, match_summary):
                 hits.setdefault(h["internetMessageId"], h)
     system_times = [
-        _ts(h["receivedDateTime"])
+        parse_ts(h["receivedDateTime"])
         for h in hits.values()
         if config.is_system_sender(h.get("sender") or "")
     ]
@@ -176,20 +158,19 @@ def split(
             continue
         if not any(r.lower() in own for r in h.get("recipients") or []):
             continue
-        t = _ts(h["receivedDateTime"])
+        t = parse_ts(h["receivedDateTime"])
         if any(
             abs((t - p).total_seconds()) <= SYSTEM_PAIR_SECONDS for p in system_times
         ):
             hits[h["internetMessageId"]] = h
 
-    ordered = sorted(hits.values(), key=lambda h: h["receivedDateTime"])
+    ordered = sorted(hits.values(), key=lambda h: parse_ts(h["receivedDateTime"]))
     if since:
         ordered = [h for h in ordered if h["receivedDateTime"][:10] >= since]
-    messages = archive / "messages"
     read_lines: list[str] = []
     for i, h in enumerate(ordered, 1):
         nn = f"{i:02d}"
-        path = messages / f"{store.id_hash(h['internetMessageId'])}.json"
+        path = store.message_path(h["internetMessageId"], root)
         if path.exists():
             timeline = timeline_from_archive(path)
             target = scratch / f"{name}-{nn}.timeline.json"
@@ -198,6 +179,11 @@ def split(
         else:
             out.to_read.append((nn, h))
             read_lines.append(f"{name}-{nn} {h['uri']}")
+    if batches:
+        batch_name = re.compile(re.escape(name) + r"-batch-\d+\.txt")
+        for old in batches.glob("*.txt"):
+            if batch_name.fullmatch(old.name):
+                old.unlink()
     if batches and read_lines:
         batches.mkdir(parents=True, exist_ok=True)
         for b, i in enumerate(range(0, len(read_lines), per), 1):
@@ -214,7 +200,7 @@ class Checked:
     day: str
     ok: bool
     direction: str
-    system: bool
+    automated: bool
     texts: int
     subject: str
     finding: str = ""  # why a row is not ok
@@ -250,7 +236,7 @@ def timelines(scratch: Path, name: str) -> list[tuple[str, Path]]:
 
 
 def check(
-    name: str, *, scratch: Path | None = None, archive: Path | None = None
+    name: str, *, scratch: Path | None = None, root: Path | None = None
 ) -> list[Checked]:
     """Every ``{name}-{nn}.timeline.json`` against the archive.
 
@@ -260,14 +246,14 @@ def check(
     key, so a file written by another build is not read as a wrong date.
     """
     scratch = scratch or config.scratch_dir()
-    messages = (archive or store.archive_root()) / "messages"
+    messages = (root or config.archive_dir()) / "messages"
     rows = []
     for nn, f in timelines(scratch, name):
         t = json.loads(f.read_text(encoding="utf-8"))
         absent = [key for key in REQUIRED_KEYS if not t.get(key)]
         mid = t.get("internet_message_id")
         h = store.id_hash(mid) if mid else ""
-        stored = messages / f"{h}.json"
+        stored = store.message_path(mid, root) if mid else messages / ".json"
         received = ""
         day = ""
         if h and stored.exists():
@@ -290,7 +276,7 @@ def check(
                 day=day,
                 ok=not finding,
                 direction=t.get("direction", ""),
-                system=bool(t.get("system")),
+                automated=bool(t.get("automated")),
                 texts=len(list(messages.glob(f"{h}.*.txt"))) if h else 0,
                 subject=t.get("subject", ""),
                 finding=finding,

@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: Sweep the configured Outlook mailbox for everything new since the last run, archive it, classify every message, and present a worklist for the operator's approval before anything is filed.
+description: Sweep the configured Outlook mailbox for everything new since the last run, archive it, classify every message, and present every candidate for the operator's approval before anything is filed.
 metadata:
   version: "1.0.0"
 ---
@@ -8,8 +8,8 @@ metadata:
 # Outlook: sweep the mailbox
 
 Finds what is new since the last run, classifies every message, and — once
-the operator approves a worklist — hands each approved candidate to the
-repo's own filing step and records every message in the dedup ledger. Writes
+the operator approves the candidates — hands each approved one to the repo's
+own filing step and records every message in the dedup ledger. Writes
 to shared state after the approval gate, and to the archive throughout.
 
 The other modes: `{cli} skill lookup` (the full correspondence with one
@@ -39,7 +39,7 @@ Another skill or a profile that refers to a step cites it by that name
    and `kind`, `filed`, `skipped`, and `deferred` otherwise. Wherever this
    skill uses those words, write the profile's instead, so one ledger never
    mixes two vocabularies. Whichever word the profile maps to `deferred`
-   keeps its meaning: its rows come back into the next worklist.
+   keeps its meaning: its rows come back into the next approval table.
 
 ## 1. Sweep (step `sweep`)
 
@@ -117,7 +117,7 @@ where most of the mail that needs action answers a thread it started.
 A skipped reply can still matter. It may be a follow-up on a candidate's
 thread, or carry a revised file. List any reply from a candidate's thread
 (same `conversationId` or normalized subject) under that candidate in the
-worklist.
+approval table.
 
 When the profile has a **new-sender rule** (flag any inbound first message
 from a sender its registries don't know), a flagged message outside the
@@ -138,9 +138,10 @@ matching rules in the profile. A hit in a registry usually means an existing
 person or matter, so the message is a follow-up, not a new entry. Note
 anything the profile asks to be checked or proposed for each candidate
 (where it would be filed, how it would be named, which of the repo's
-required questions it leaves unanswered). Don't fill a gap yourself.
+required questions it leaves unanswered). Don't supply what is missing
+yourself.
 
-## 4. Worklist — stop here for approval (step `worklist`)
+## 4. Present for approval — stop here (step `approval`)
 
 Present one table before anything is written: every candidate, plus a
 one-line count of skipped messages by kind (so the operator can spot a
@@ -150,8 +151,8 @@ misfile). For each candidate, show:
   (names and types)
 - proposed kind, and whatever the profile's filing step needs decided
   (where it goes, under what name, what record it creates or changes)
-- any questions the sender asked that need a reply, and any gaps the
-  profile's checks found
+- any questions the sender asked that need a reply, and anything the
+  profile's checks found missing
 
 Wait for the operator's go-ahead, and follow any redirects ("skip this
 one", "file it as the other kind", a different destination). Everything
@@ -184,7 +185,7 @@ these hold:
 - The candidate's ledger row is written as soon as it is filed, before the
   next candidate starts (step 6 says why).
 
-With no filing step in the profile, stop at the worklist: record the
+With no filing step in the profile, stop at the approval table: record the
 approved candidates in the ledger as the operator directs, and list them in
 the report for the operator to act on.
 
@@ -211,8 +212,8 @@ three columns; the rest are the profile's *Ledger columns*:
 
 A candidate the operator defers ("not yet", "ask me next time") gets
 `outcome` `deferred`. The high-water mark moves past it either way, so step
-1 brings `deferred` rows back into the worklist. When it's filed or dropped
-later, update that row's `outcome` rather than adding a second one.
+1 brings `deferred` rows back into the approval table. When it's filed or
+dropped later, update that row's `outcome` rather than adding a second one.
 
 Keep the ledger sorted by `received`, write it with LF line endings, and
 quote fields that contain commas.
@@ -221,9 +222,9 @@ quote fields that contain commas.
 
 Summarize what was filed (with the links the filing step returned), what
 was skipped (counts by kind), what the operator still has to do by hand
-(original attachments, questions to answer, gaps to raise), and any registry
-hygiene the matching turned up, such as a stale address. Flag hygiene
-issues; don't fix them unasked. Run `{cli} import` once more, so anything
+(original attachments, questions to answer, missing information to raise),
+and any registry hygiene the matching turned up, such as a stale address.
+Flag hygiene issues; don't fix them unasked. Run `{cli} import` once more, so anything
 read during filing is archived, and say how much mail the sweep archived
 (pages and full messages). Offer to commit the ledger, the archive, and
 whatever the filing step changed.

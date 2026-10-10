@@ -8,11 +8,12 @@ own contract.
 """
 
 import json
+import time
 
 import pytest
 
+from outlooks import classify, store
 from outlooks import lookup as lk
-from outlooks import store
 
 RECEIVED = "2026-01-01T00:00:00.000Z"
 
@@ -71,7 +72,7 @@ def test_split_matches_on_sender_recipients_and_subject(tmp_path):
     no_match = hit("<a4>", "x@example.com", ["desk@example.org"], subject="unrelated")
     write_page(scratch, "priya", 1, [by_sender, by_recipient, by_subject, no_match])
 
-    result = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    result = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     ids = {h["internetMessageId"] for _, h in [*result.known, *result.to_read]}
     assert ids == {"<a1>", "<a2>", "<a3>"}
 
@@ -87,11 +88,11 @@ def test_split_matches_the_summary_only_with_match_summary(tmp_path):
     )
     write_page(scratch, "priya", 1, [named_in_summary])
 
-    with_summary = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    with_summary = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     assert with_summary.total == 1
 
     without_summary = lk.split(
-        "priya", ["priya"], scratch=scratch, archive=archive, match_summary=False
+        "priya", ["priya"], scratch=scratch, root=archive, match_summary=False
     )
     assert without_summary.total == 0
 
@@ -127,7 +128,7 @@ def test_split_pairs_a_system_notice_to_us_near_a_matched_system_hit(tmp_path):
     )
     write_page(scratch, "priya", 1, [matched_system, paired_to_us, too_late_to_us])
 
-    result = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    result = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     ids = {h["internetMessageId"] for _, h in [*result.known, *result.to_read]}
     assert ids == {"<s1>", "<s2>"}
 
@@ -147,7 +148,7 @@ def test_split_writes_timelines_for_archived_hits_and_batches_the_rest(tmp_path)
 
     batches = tmp_path / "batches"
     result = lk.split(
-        "priya", ["priya"], scratch=scratch, archive=archive, batches=batches, per=2
+        "priya", ["priya"], scratch=scratch, root=archive, batches=batches, per=2
     )
 
     assert result.pages == 1
@@ -181,7 +182,7 @@ def test_split_removes_stale_timeline_files_before_renumbering(tmp_path):
     stale.write_text("{}", encoding="utf-8")
     write_page(scratch, "priya", 1, [])
 
-    lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    lk.split("priya", ["priya"], scratch=scratch, root=archive)
     assert not stale.exists()
 
 
@@ -205,12 +206,12 @@ def test_a_lookup_of_100_or_more_hits_is_renumbered_and_checked_in_full(tmp_path
     other = scratch / "priya-2024-01.timeline.json"
     other.write_text("{}", encoding="utf-8")
 
-    result = lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    result = lk.split("priya", ["priya"], scratch=scratch, root=archive)
     assert [nn for nn, _ in result.known][-2:] == ["99", "100"]
     assert not (scratch / "priya-101.timeline.json").exists()
     assert other.exists() and (scratch / "priya-page-01.json").exists()
 
-    rows = lk.check("priya", scratch=scratch, archive=archive)
+    rows = lk.check("priya", scratch=scratch, root=archive)
     assert [r.nn for r in rows] == [f"{n:02d}" for n in range(1, 101)]
     assert all(r.ok for r in rows)
 
@@ -232,7 +233,7 @@ def test_split_filters_by_since(tmp_path):
     write_page(scratch, "priya", 1, [early, late])
 
     result = lk.split(
-        "priya", ["priya"], scratch=scratch, archive=archive, since="2026-01-15"
+        "priya", ["priya"], scratch=scratch, root=archive, since="2026-01-15"
     )
     assert [h["internetMessageId"] for _, h in result.to_read] == ["<d2>"]
 
@@ -245,7 +246,7 @@ def test_check_reports_ok_and_bad_rows(tmp_path):
     good_hit = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
     archive_message(archive, good_hit)
     write_page(scratch, "priya", 1, [good_hit])
-    lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    lk.split("priya", ["priya"], scratch=scratch, root=archive)
 
     # A second timeline claiming a message the archive never received.
     bad = {
@@ -260,32 +261,36 @@ def test_check_reports_ok_and_bad_rows(tmp_path):
         "weblink": "",
         "attachments": [],
         "summary": "",
-        "system": False,
+        "automated": False,
         "source": "manual",
     }
     (scratch / "priya-02.timeline.json").write_text(json.dumps(bad), encoding="utf-8")
 
-    rows = lk.check("priya", scratch=scratch, archive=archive)
+    rows = lk.check("priya", scratch=scratch, root=archive)
     by_nn = {r.nn: r for r in rows}
     assert by_nn["01"].ok is True
     assert by_nn["02"].ok is False
 
 
-def test_is_system_and_direction():
+def test_is_automated_and_direction():
     from outlooks import config
 
-    assert lk.is_system("Notices@SYSTEM.Example.Org")
-    assert not lk.is_system("priya.nakamura@example.com")
-    assert lk.direction("desk@example.org", ["someone@example.com"]) == "out"
-    assert lk.direction("priya.nakamura@example.com", ["desk@example.org"]) == "in"
+    assert classify.is_automated("Notices@SYSTEM.Example.Org")
+    assert not classify.is_automated("priya.nakamura@example.com")
+    assert classify.direction("desk@example.org", ["someone@example.com"]) == "out"
+    assert (
+        classify.direction("priya.nakamura@example.com", ["desk@example.org"]) == "in"
+    )
     # System mail not addressed to us is outbound (a notice to a correspondent).
     own = config.settings().own_addresses
     assert "desk@example.org" in own
     assert (
-        lk.direction("notices@system.example.org", ["priya.nakamura@example.com"])
+        classify.direction("notices@system.example.org", ["priya.nakamura@example.com"])
         == "out"
     )
-    assert lk.direction("notices@system.example.org", ["desk@example.org"]) == "in"
+    assert (
+        classify.direction("notices@system.example.org", ["desk@example.org"]) == "in"
+    )
 
 
 def test_a_notice_senders_mail_is_inbound_whoever_it_is_addressed_to(monkeypatch):
@@ -295,16 +300,16 @@ def test_a_notice_senders_mail_is_inbound_whoever_it_is_addressed_to(monkeypatch
     bounce = "postmaster@mail.example.net"
     assert config.is_notice_sender(bounce)
     assert not config.is_system_sender(bounce)
-    assert lk.is_system(bounce)
-    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
-    assert lk.direction("Postmaster@Other.Example.com", []) == "in"
+    assert classify.is_automated(bounce)
+    assert classify.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert classify.direction("Postmaster@Other.Example.com", []) == "in"
     # An address both lists match is a notice sender.
     monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", "*@mail.example.net")
     assert config.is_notice_sender(bounce)
     assert not config.is_system_sender(bounce)
     assert config.is_system_sender("alerts@mail.example.net")
-    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
-    assert lk.direction("alerts@mail.example.net", ["priya@example.com"]) == "out"
+    assert classify.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert classify.direction("alerts@mail.example.net", ["priya@example.com"]) == "out"
 
 
 # The second system list also matches the bounce address: it is still a notice.
@@ -331,7 +336,7 @@ def test_split_pairs_nothing_with_a_matched_notice(
         received="2026-01-05T10:00:20Z",
     )
     write_page(scratch, "priya", 1, [bounce, system_to_us])
-    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path / "archive")
+    out = lk.split("priya", ["priya"], scratch=scratch, root=tmp_path / "archive")
     assert [h["internetMessageId"] for _, h in out.to_read] == [
         bounce["internetMessageId"]
     ]
@@ -354,7 +359,7 @@ def timeline(scratch, name, nn, **changes):
         "weblink": "",
         "attachments": [],
         "summary": "",
-        "system": False,
+        "automated": False,
         **changes,
     }
     record = {k: v for k, v in record.items() if v is not None}
@@ -374,7 +379,7 @@ def test_check_says_why_a_row_is_bad(tmp_path):
     timeline(scratch, "priya", "03", internet_message_id="<never-read>")
     timeline(scratch, "priya", "04", date_local=None)
     timeline(scratch, "priya", "05", internet_message_id=None, date_local="")
-    rows = lk.check("priya", scratch=scratch, archive=archive)
+    rows = lk.check("priya", scratch=scratch, root=archive)
     assert [(r.nn, r.ok, r.finding) for r in rows] == [
         ("01", True, ""),
         ("02", False, "date_local 2026-01-01, the archive says 2025-12-31"),
@@ -391,7 +396,7 @@ def test_the_split_writes_exactly_the_documented_keys(tmp_path):
     h = hit("<e1>", "priya.nakamura@example.com", ["desk@example.org"])
     archive_message(archive, h)
     write_page(scratch, "priya", 1, [h])
-    lk.split("priya", ["priya"], scratch=scratch, archive=archive)
+    lk.split("priya", ["priya"], scratch=scratch, root=archive)
     written = json.loads((scratch / "priya-01.timeline.json").read_text("utf-8"))
     assert tuple(written) == lk.TIMELINE_KEYS
     assert set(lk.REQUIRED_KEYS) <= set(lk.CHECK_READS) <= set(lk.TIMELINE_KEYS)
@@ -445,7 +450,7 @@ def test_reset_moves_a_names_pages_and_timelines_and_nothing_else(tmp_path):
     assert not any(p.exists() for p in mine)
     assert all(p.exists() for p in others)
     # The split now finds nothing of the earlier lookup.
-    assert lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path).pages == 0
+    assert lk.split("priya", ["priya"], scratch=scratch, root=tmp_path).pages == 0
 
 
 def test_reset_never_overwrites_an_earlier_reset(tmp_path):
@@ -488,5 +493,71 @@ def test_split_leaves_out_the_pages_of_a_longer_name(tmp_path):
     other = hit("<e2>", "priya.nakamura@example.com", ["desk@example.org"])
     write_page(scratch, "priya", 1, [mine])
     write_page(scratch, "priya-n", 1, [other])
-    out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path)
+    out = lk.split("priya", ["priya"], scratch=scratch, root=tmp_path)
     assert out.pages == 1
+
+
+@pytest.mark.parametrize("remaining", [0, 1, 3])
+def test_split_clears_only_its_stale_batches(tmp_path, remaining):
+    scratch, archive, batches = (
+        tmp_path / name for name in ("scratch", "archive", "batches")
+    )
+    hits = [hit(f"<{n}@example.org>", "reader@example.org", []) for n in range(5)]
+    write_page(scratch, "topic", 1, hits)
+    lk.split("topic", ["reader"], scratch=scratch, root=archive, batches=batches)
+    unrelated = batches / "topic-other-batch-01.txt"
+    unrelated.write_text("keep this batch\n", encoding="utf-8")
+    note = batches / "topic-batch-notes.txt"
+    note.write_text("keep these notes\n", encoding="utf-8")
+    write_page(scratch, "topic", 1, hits[:remaining])
+
+    result = lk.split(
+        "topic", ["reader"], scratch=scratch, root=archive, batches=batches
+    )
+
+    assert sorted(batches.glob("topic-batch-[0-9]*.txt")) == result.batches
+    assert unrelated.read_text(encoding="utf-8") == "keep this batch\n"
+    assert note.read_text(encoding="utf-8") == "keep these notes\n"
+
+
+@pytest.mark.parametrize(
+    "earlier,later",
+    [
+        ("2026-03-20T01:00:00+02:00", "2026-03-19T23:30:00Z"),
+        ("2026-03-20T00:00:00Z", "2026-03-20T00:00:00.500Z"),
+    ],
+)
+def test_split_numbers_hits_in_chronological_order(tmp_path, earlier, later):
+    write_page(
+        tmp_path,
+        "topic",
+        1,
+        [
+            hit("<later@example.org>", "reader@example.org", [], received=later),
+            hit("<earlier@example.org>", "reader@example.org", [], received=earlier),
+        ],
+    )
+    result = lk.split("topic", ["reader"], scratch=tmp_path)
+    assert [h["internetMessageId"] for _, h in result.to_read] == [
+        "<earlier@example.org>",
+        "<later@example.org>",
+    ]
+
+
+def test_timeline_accepts_null_recipient_and_attachment_lists(tmp_path):
+    h = hit("<nullable@example.org>", "reader@example.org", [])
+    path = archive_message(tmp_path, h, toRecipients=None, attachments=None)
+    timeline = lk.timeline_from_archive(path)
+    assert timeline["to"] == []
+    assert timeline["attachments"] == []
+
+
+def test_local_day_treats_naive_received_utc_as_utc(monkeypatch):
+    monkeypatch.setenv("OUTLOOKS_TIMEZONE", "America/Los_Angeles")
+    try:
+        with monkeypatch.context() as machine:
+            machine.setenv("TZ", "America/Los_Angeles")
+            time.tzset()
+            assert lk.local_day("2026-01-01T01:00:00") == "2025-12-31"
+    finally:
+        time.tzset()

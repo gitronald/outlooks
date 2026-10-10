@@ -9,7 +9,7 @@ below).
 
 Load the tool schema: ToolSearch query "select:mcp__claude_ai_Microsoft_365__outlook_email_search".
 
-Your worklist file has one line: `NAME KIND TERM [FALLBACK]`, where KIND is
+Your search task file has one line: `NAME KIND TERM [FALLBACK]`, where KIND is
 `query`, `sender`, `title`, or `sent`.
 
 Call `mcp__claude_ai_Microsoft_365__outlook_email_search` with

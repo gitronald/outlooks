@@ -25,13 +25,13 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from outlooks import config
+from outlooks.timestamps import parse_ts
 
 # The names a consuming repo may import; a change to one is a changelog
 # entry. The write paths (``save_*``, ``replace_*``) are not: a repo fills the
 # archive through ``outlooks import``, never by calling the store.
 __all__ = [
     "StoreError",
-    "archive_root",
     "id_hash",
     "load_hits",
     "load_messages",
@@ -48,18 +48,18 @@ class StoreError(Exception):
     """A payload the store cannot take, or one that contradicts what it holds."""
 
 
-def archive_root() -> Path:
-    """The committed mailbox archive, from ``[tool.outlooks] archive_dir``."""
-    return config.archive_dir()
-
-
 def _root(root: Path | None) -> Path:
-    return archive_root() if root is None else root
+    return config.archive_dir() if root is None else root
 
 
 def id_hash(internet_message_id: str) -> str:
     """A short, stable, filename-safe key for an ``internetMessageId``."""
     return hashlib.sha256(internet_message_id.encode("utf-8")).hexdigest()[:16]
+
+
+def message_path(internet_message_id: str, root: Path | None = None) -> Path:
+    """The archive path for one message."""
+    return _root(root) / "messages" / f"{id_hash(internet_message_id)}.json"
 
 
 def stable(payload: dict[str, Any]) -> dict[str, Any]:
@@ -107,8 +107,7 @@ def save_message(
     ``{id-hash}.1.txt``, ``{id-hash}.2.txt``, ...
     """
     _require_full(message)
-    key = id_hash(_message_id(message))
-    path = _root(root) / "messages" / f"{key}.json"
+    path = message_path(_message_id(message), root)
     written = _write_once(path, _dump(stable(message)))
     for n, text in enumerate(texts or [], start=1):
         written |= save_attachment_text(message, n, text, root)
@@ -145,7 +144,7 @@ def replace_message(message: dict[str, Any], root: Path | None = None) -> bool:
     Returns whether the stored file changed.
     """
     _require_full(message)
-    path = _root(root) / "messages" / f"{id_hash(_message_id(message))}.json"
+    path = message_path(_message_id(message), root)
     content = _dump(stable(message))
     if path.exists() and path.read_text(encoding="utf-8") == content:
         return False
@@ -155,13 +154,13 @@ def replace_message(message: dict[str, Any], root: Path | None = None) -> bool:
 
 
 def uri_owner(uri: str) -> str | None:
-    """The mailbox a connector uri names, from its ``owner`` parameter."""
+    """The owner a connector uri names, from its ``owner`` parameter."""
     owner = parse_qs(urlparse(uri).query).get("owner")
     return owner[0].lower() if owner else None
 
 
-def hit_mailbox(hit: dict[str, Any]) -> str | None:
-    """The mailbox a hit was listed from, from its uri's ``owner`` parameter."""
+def hit_owner(hit: dict[str, Any]) -> str | None:
+    """The owner a hit was listed from, from its uri's ``owner`` parameter."""
     return uri_owner(hit.get("uri", ""))
 
 
@@ -179,7 +178,7 @@ def save_hits(
     for hit in page:
         if "internetMessageId" not in hit:
             continue  # the paging trailer
-        box = (mailbox or hit_mailbox(hit) or "").lower()
+        box = (mailbox or hit_owner(hit) or "").lower()
         if not box:
             raise StoreError(
                 f"no mailbox for hit {hit['internetMessageId']}; pass --mailbox"
@@ -312,10 +311,14 @@ def load_messages(root: Path | None = None) -> dict[str, dict[str, Any]]:
 def newest_hit(root: Path | None = None, mailbox: str | None = None) -> str | None:
     """The latest ``receivedDateTime`` in tier 1 (for one mailbox, if given)."""
     latest = None
+    latest_instant = None
     for hit in load_hits(root).values():
         if mailbox and hit["mailbox"] != mailbox.lower():
             continue
         received = hit.get("receivedDateTime")
-        if received and (latest is None or received > latest):
-            latest = received
+        if received:
+            instant = parse_ts(received)
+            if latest_instant is None or instant > latest_instant:
+                latest = received
+                latest_instant = instant
     return latest

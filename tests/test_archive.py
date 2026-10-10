@@ -146,7 +146,7 @@ def test_details_by_id_is_empty_when_nothing_is_archived(tmp_path):
 
 def test_classify_system_mail_by_its_sender_alone():
     mail = cl.view(load("system-notice.json"))
-    assert cl.classify(mail) == cl.Facts("system")
+    assert cl.classify(mail) == cl.Facts("automated")
     assert mail.recipients == ("desk@example.org",)
     # A reply prefix does not make a system sender's mail a follow-up.
     hit = {
@@ -154,7 +154,7 @@ def test_classify_system_mail_by_its_sender_alone():
         "sender": "Notices@System.Example.org",
         "subject": "RE: New request received",
     }
-    assert cl.classify(cl.view(hit)).role == "system"
+    assert cl.classify(cl.view(hit)).role == "automated"
 
 
 def test_classify_a_notice_senders_mail_as_system_flagged_notice(monkeypatch):
@@ -164,7 +164,7 @@ def test_classify_a_notice_senders_mail_as_system_flagged_notice(monkeypatch):
         "recipients": ["priya.nakamura@example.com"],
         "subject": "Undeliverable: Winter Soil",
     }
-    assert cl.classify(cl.view(bounce)) == cl.Facts("system", extra={"notice": True})
+    assert cl.classify(cl.view(bounce)) == cl.Facts("automated", extra={"notice": True})
     monkeypatch.delenv("OUTLOOKS_NOTICE_SENDERS")
     assert cl.classify(cl.view(bounce)).role == "followup"
 
@@ -314,3 +314,16 @@ def test_classify_has_no_decision_role_when_the_tag_is_unset(tmp_path, monkeypat
     # Still ours (the sender is a configured own_address), just never tagged
     # as a decision when no decision_tag is configured to look for.
     assert cl.classify(decision).role == "ours"
+
+
+def test_newest_hit_compares_instants_and_keeps_the_original_timestamp(tmp_path):
+    timestamps = ["2026-03-20T01:00:00+02:00", "2026-03-19T23:30:00Z"]
+    store.save_hits(
+        [
+            {"internetMessageId": f"<{n}@example.org>", "receivedDateTime": value}
+            for n, value in enumerate(timestamps)
+        ],
+        mailbox="desk@example.org",
+        root=tmp_path,
+    )
+    assert store.newest_hit(tmp_path) == timestamps[1]

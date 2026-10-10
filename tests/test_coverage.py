@@ -20,6 +20,7 @@ from outlooks import config, store
 from outlooks import coverage as cv
 from outlooks import hook as hk
 from outlooks.cli import app
+from outlooks.timestamps import fmt_ts, parse_ts
 
 BOX = "desk@example.org"
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -132,7 +133,7 @@ def pulled(tmp_path):
 def test_read_capture_parses_a_search_page(pulled):
     c = cp.read_capture(sorted(pulled.glob("*.json"))[0])
     assert c is not None
-    assert c.tool == "search" and c.mailbox == BOX
+    assert c.tool == "search" and c.owner == BOX
     assert [h["offset"] for h in c.hits] == [0, 1] and c.total == 3
     assert c.at == datetime(2026, 9, 13, 10, 0, tzinfo=PACIFIC)
 
@@ -143,21 +144,21 @@ def test_load_captures_skips_files_that_are_not_captures(pulled):
     assert len(captures) == 2 and [p.name for p in other] == ["note.json"]
 
 
-def test_read_mailbox_comes_from_the_uri_owner(tmp_path):
+def test_read_owner_comes_from_the_uri_owner(tmp_path):
     uri = f"mail:///messages/ID1a?owner={BOX}"
     c = cp.read_capture(
         write_capture(tmp_path, "20260913T1", READ, {"uri": uri}, message(1))
     )
     assert c is not None
     assert c.message is not None
-    assert c.mailbox == BOX and c.message["subject"] == "message 1"
+    assert c.owner == BOX and c.message["subject"] == "message 1"
     mine = cp.read_capture(
         write_capture(
             tmp_path, "20260913T2", READ, {"uri": "mail:///messages/X"}, message(2)
         )
     )
     assert mine is not None
-    assert mine.mailbox is None
+    assert mine.owner is None
 
 
 def test_an_oversized_read_is_taken_from_the_file_it_was_saved_to(tmp_path):
@@ -637,8 +638,8 @@ def test_a_window_is_complete_when_every_offset_is_captured(pulled):
     captures, _ = cp.load_captures([pulled])
     [w] = cv.windows(captures, BOX)
     assert w.complete and w.total == 3 and len(w.messages) == 3
-    assert cv.fmt_ts(w.after) == "2026-03-01T08:00:00Z"
-    assert cv.fmt_ts(w.end) == "2026-04-01T07:00:00Z"
+    assert fmt_ts(w.after) == "2026-03-01T08:00:00Z"
+    assert fmt_ts(w.end) == "2026-04-01T07:00:00Z"
 
 
 def test_a_missing_page_leaves_the_window_incomplete(pulled):
@@ -738,7 +739,7 @@ def test_record_appends_once_and_refuses_an_unarchived_window(pulled, tmp_path):
 
 
 def ts(value):
-    return cv.parse_ts(value)
+    return parse_ts(value)
 
 
 def test_merge_joins_overlapping_and_touching_rows():
@@ -765,6 +766,25 @@ def test_gaps_between_and_after_the_covered_spans():
         (ts("2026-02-01T00:00:00Z"), ts("2026-03-01T00:00:00Z")),
         (ts("2026-04-01T00:00:00Z"), now),
     ]
+
+
+def test_report_counts_a_hit_at_a_spans_end_as_covered():
+    # A pull's bounds are inclusive, so the hit received at the row's
+    # ``before`` instant was listed by it: covered, not "lookup only".
+    rows = [
+        {
+            "mailbox": BOX,
+            "after": "2026-03-01T08:00:00Z",
+            "before": "2026-04-01T07:00:00Z",
+        }
+    ]
+    hits = {"<end>": {"mailbox": BOX, "receivedDateTime": "2026-04-01T07:00:00Z"}}
+    lines = cv.report(BOX, rows, hits, set(), [], now=ts("2026-05-01T07:00:00Z"))
+    assert "  covered  2026-03-01 00:00 to 2026-04-01 00:00  1 archived" in lines
+    assert "  GAP      2026-04-01 00:00 to 2026-05-01 00:00" in lines
+    assert lines[lines.index("covered hits with no full read, by month:") + 1] == (
+        "  2026-04  1"
+    )
 
 
 def test_report_counts_lookup_hits_in_gaps_unread_hits_and_ledger_lag():
@@ -1090,10 +1110,10 @@ def test_paths_resolve_from_the_project_root_in_any_subdirectory(tmp_path, monke
     (member / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
     monkeypatch.chdir(member / "src")
     root = tmp_path.resolve()
-    assert cp.captured_dir() == root / "temp" / "outlook" / "captured"
-    assert store.archive_root() == root / "mail"
+    assert config.captured_dir() == root / "temp" / "outlook" / "captured"
+    assert config.archive_dir() == root / "mail"
     assert cv.coverage_csv() == root / "mail" / "coverage.csv"
-    assert config.mailbox() == "box@example.org"
+    assert config.archive_mailbox() == "box@example.org"
 
 
 def test_env_overrides_the_table_and_a_missing_mailbox_is_refused(
@@ -1103,12 +1123,12 @@ def test_env_overrides_the_table_and_a_missing_mailbox_is_refused(
     monkeypatch.delenv("OUTLOOKS_MAILBOX", raising=False)
     monkeypatch.delenv("OUTLOOKS_OWN_ADDRESSES", raising=False)
     with pytest.raises(config.ConfigError):
-        config.mailbox()
+        config.archive_mailbox()
     monkeypatch.setenv("OUTLOOKS_MAILBOX", "other@example.org")
     monkeypatch.setenv("OUTLOOKS_ARCHIVE_DIR", str(tmp_path / "elsewhere"))
     monkeypatch.setenv("OUTLOOKS_TIMEZONE", "America/New_York")
-    assert config.mailbox() == "other@example.org"
-    assert store.archive_root() == tmp_path / "elsewhere"
+    assert config.archive_mailbox() == "other@example.org"
+    assert config.archive_dir() == tmp_path / "elsewhere"
     assert config.zone() == ZoneInfo("America/New_York")
 
 
@@ -1291,7 +1311,7 @@ def test_window_bounds_are_utc_and_an_unset_before_is_open(tmp_path):
     )
     captures, _ = cp.load_captures([folder])
     bounded, *unbounded = (cv.window_bounds(c) for c in captures)
-    assert [cv.fmt_ts(bounded[0]), cv.fmt_ts(bounded[1] or bounded[0])] == [
+    assert [fmt_ts(bounded[0]), fmt_ts(bounded[1] or bounded[0])] == [
         "2026-03-01T08:00:00Z",
         "2026-04-01T07:00:00Z",
     ]
@@ -1373,3 +1393,60 @@ def test_no_setting_comes_from_the_directory_the_suite_runs_in():
     assert settings.source is None
     assert settings.profile is None
     assert settings.origins["profile"] == "default"
+
+
+def test_ledger_high_water_mark_compares_instants():
+    ledger = [
+        {"received": "2026-03-20T01:00:00+02:00"},
+        {"received": "2026-03-19T23:30:00Z"},
+    ]
+    lines = cv.report(BOX, [], {}, set(), ledger, now=ts("2026-05-01T00:00:00Z"))
+    assert footer(lines) == ["next sweep from         2026-03-19T23:25:00Z"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        [{"type": "image", "data": "unavailable"}],
+        [None],
+        [{"type": "text", "text": None}],
+        [{"type": "text", "text": 17}],
+    ],
+)
+def test_unrecoverable_blocks_never_prove_an_empty_window(tmp_path, response):
+    path = tmp_path / "20260301T120000-1.json"
+    path.write_text(
+        json.dumps(
+            {
+                "tool_name": SEARCH,
+                "tool_input": window_args(),
+                "tool_response": response,
+            }
+        ),
+        encoding="utf-8",
+    )
+    captures, other = cp.load_captures([path])
+    assert other == []
+    assert len(captures) == 1
+    assert captures[0].lost
+    assert cv.windows(captures, BOX) == []
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"tool_name": None}, {"tool_name": 17}, {"tool_input": None}, {"tool_input": []}],
+)
+def test_invalid_capture_envelopes_are_skipped(tmp_path, changes):
+    path = tmp_path / "capture.json"
+    path.write_text(
+        json.dumps(
+            {
+                "tool_name": SEARCH,
+                "tool_input": window_args(),
+                "tool_response": [],
+                **changes,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert cp.load_captures([path]) == ([], [path])

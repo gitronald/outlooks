@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from outlooks import render
+from outlooks import gateway, render
 from outlooks.cli import app
 
 FIXTURES = Path(__file__).parent / "fixtures" / "outlook"
@@ -34,7 +34,7 @@ def plain(path: Path) -> str:
 
 
 def test_clean_body_drops_the_banner_and_preheader(message):
-    body = render.clean_body(message["body"]["content"])
+    body = gateway.clean_body(message["body"]["content"])
     assert body.startswith("<p>Dear organizers:</p>")
     for leftover in (
         "Untrusted Sender",
@@ -47,7 +47,7 @@ def test_clean_body_drops_the_banner_and_preheader(message):
 
 
 def test_clean_body_unwraps_url_defense_links(message):
-    body = render.clean_body(message["body"]["content"])
+    body = gateway.clean_body(message["body"]["content"])
     assert "urldefense" not in body
     assert '<a href="https://profiles.example.net/priya-nakamura-garden/">' in body
     assert '<a href="https://nakamuragarden.example">' in body
@@ -58,14 +58,14 @@ def test_clean_body_decodes_a_link_whose_text_is_not_a_url():
         '<p><a href="https://urldefense.com/v3/__https://example.org/notes__;'
         '!!abc$">the notes</a></p>'
     )
-    assert render.clean_body(html) == (
+    assert gateway.clean_body(html) == (
         '<p><a href="https://example.org/notes">the notes</a></p>'
     )
 
 
 def test_clean_body_drops_a_preheader_without_a_banner():
     html = '<div style="display:none;color:#fff">Preview text</div><p>Hi</p>'
-    assert render.clean_body(html) == "<p>Hi</p>"
+    assert gateway.clean_body(html) == "<p>Hi</p>"
 
 
 def test_clean_body_prefers_the_link_text_when_it_is_a_url():
@@ -73,7 +73,7 @@ def test_clean_body_prefers_the_link_text_when_it_is_a_url():
         '<a href="https://urldefense.com/v3/__https://example.org/a*b__;Xw!!x$">'
         "https://example.org/shown</a>"
     )
-    assert render.clean_body(html) == (
+    assert gateway.clean_body(html) == (
         '<a href="https://example.org/shown">https://example.org/shown</a>'
     )
 
@@ -86,7 +86,7 @@ def test_clean_body_decodes_proofpoint_escapes():
         'people/501/**A-doyle-marin__;w7M!!abcDEF123456ghiJKL!eLRd$">'
         "Example University</a>"
     )
-    assert render.clean_body(html) == (
+    assert gateway.clean_body(html) == (
         '<a href="https://www.example-univ.edu/faculty/people/501/ó-doyle-marin">'
         "Example University</a>"
     )
@@ -98,7 +98,7 @@ def test_clean_body_decodes_a_single_byte_escape():
         '<a href="https://urldefense.com/v3/__https://example.org/a*b__;Xw!!x$">'
         "the notes</a>"
     )
-    assert render.clean_body(html) == (
+    assert gateway.clean_body(html) == (
         '<a href="https://example.org/a_b">the notes</a>'
     )
 
@@ -108,7 +108,7 @@ def test_clean_body_escapes_a_query_ampersand_once():
         '<a href="https://urldefense.com/v3/__https://scholar.example.org/c?'
         'user=YJ8&amp;hl=en__;!!abcDEF$">Profile page</a>'
     )
-    assert render.clean_body(html) == (
+    assert gateway.clean_body(html) == (
         '<a href="https://scholar.example.org/c?user=YJ8&amp;hl=en">Profile page</a>'
     )
 
@@ -119,12 +119,12 @@ def test_clean_body_leaves_an_undecodable_link_wrapped():
         '<a href="https://urldefense.com/v3/__https://example.org/a**Bb__;w7M!!x$">'
         "the notes</a>"
     )
-    assert render.clean_body(html) == html
+    assert gateway.clean_body(html) == html
 
 
 def test_clean_body_leaves_a_plain_message_alone():
     html = '<p>Hello <a href="https://example.org">site</a></p>'
-    assert render.clean_body(html) == html
+    assert gateway.clean_body(html) == html
 
 
 def test_clean_body_keeps_sender_text_above_a_quoted_banner():
@@ -143,7 +143,7 @@ def test_clean_body_keeps_sender_text_above_a_quoted_banner():
         "<p>Older text</p>"
         "</blockquote>"
     )
-    cleaned = render.clean_body(html)
+    cleaned = gateway.clean_body(html)
     assert "Dear organizers, here is my note." in cleaned
     assert "Untrusted" not in cleaned and "ZjQcmQRY" not in cleaned
 
@@ -159,7 +159,7 @@ def test_clean_body_unwraps_links_whose_href_is_not_first():
         "<a href='https://urldefense.com/v3/__https://example.org/p__;!!x$'>"
         "the notes</a>",
     ):
-        cleaned = render.clean_body(tag)
+        cleaned = gateway.clean_body(tag)
         assert 'href="https://example.org/p"' in cleaned, tag
         assert "urldefense" not in cleaned, tag
 
@@ -170,7 +170,7 @@ def test_clean_body_unwraps_the_proofpoint_com_host():
         '<a href="https://urldefense.proofpoint.com/v3/__https://example.org/p__;'
         '!!x$">the notes</a>'
     )
-    assert render.clean_body(html) == '<a href="https://example.org/p">the notes</a>'
+    assert gateway.clean_body(html) == '<a href="https://example.org/p">the notes</a>'
 
 
 def test_text_body_strips_the_banner_and_unwraps_links():
@@ -290,7 +290,7 @@ def test_decode_v3_keeps_a_query_parameter_that_looks_like_an_entity():
         ("times=3", "×=3"),
     ):
         wrapped = f"https://urldefense.com/v3/__https://ex.org/c?a=1&{query}__;!!x$"
-        decoded = render.decode_v3(wrapped)
+        decoded = gateway.decode_v3(wrapped)
         assert decoded is not None
         assert decoded == f"https://ex.org/c?a=1&{query}"
         assert mangled not in decoded
@@ -298,7 +298,7 @@ def test_decode_v3_keeps_a_query_parameter_that_looks_like_an_entity():
 
 def test_decode_v3_still_decodes_a_real_entity():
     wrapped = "https://urldefense.com/v3/__https://ex.org/c?a=1&amp;b=2__;!!x$"
-    assert render.decode_v3(wrapped) == "https://ex.org/c?a=1&b=2"
+    assert gateway.decode_v3(wrapped) == "https://ex.org/c?a=1&b=2"
 
 
 @needs_pandoc
@@ -412,3 +412,15 @@ def test_cli_render_writes_the_docx(tmp_path):
     assert result.exit_code == 0, result.output
     assert (tmp_path / "Nakamura - Message.docx").exists()
     assert "Nakamura - Message.docx" in result.output
+
+
+def test_failed_render_removes_partial_output(message, tmp_path, monkeypatch):
+    def fail(cmd, **kwargs):
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"partial document")
+        raise subprocess.CalledProcessError(1, cmd, stderr="conversion failed")
+
+    monkeypatch.setattr(render.shutil, "which", lambda _: "/usr/bin/pandoc")
+    monkeypatch.setattr(render.subprocess, "run", fail)
+    with pytest.raises(ValueError, match="pandoc failed: conversion failed"):
+        render.render(message, tmp_path)
+    assert list(tmp_path.iterdir()) == []
