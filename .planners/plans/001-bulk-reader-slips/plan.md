@@ -152,16 +152,36 @@ might fix", or "never tried".
   - Checks: `uv run pytest` 437 passed; ruff check, ruff format, and pyrefly
     clean.
 
+- **2026-10-10T11:21:25-07:00** — Step 4: a live read round was run.
+  - Setup: one day's window was pulled and imported into a scratch archive
+    outside the repo, and worklists were built with `--per 4`. Two `sonnet`
+    readers ran batches 01 and 02 at once, launched with the `read-launch`
+    prompt as now worded. The capture hook was installed for the run only and
+    removed afterwards.
+  - Retyping: all 9 captured reads (8 messages, 1 attachment) match a
+    worklist line exactly. No call came after a reader's last NAME. Each
+    reader ran `outlooks uri` for every NAME and never `cat`ted the
+    worklist.
+  - Parallelism: every capture carries `agent_id`, `agent_type`, and
+    `duration_ms`, which confirms the docs. `import` printed `last read
+    round: 2 readers, 9 reads in 0m22s (24 a minute)`, with no PARALLEL
+    line. The captures confirm it: each reader's calls ran one at a time.
+  - Return format: both readers returned exactly four status lines, then a
+    `---` and their notes below it.
+  - Binary note: an octet-stream attachment (not an image) came back as the
+    "Binary attachment" note. `import` refused it as a connector note, and
+    `audit` counted it under `binary (no text to read)`, with nothing
+    missing and nothing untried.
+  - Not covered: an octet-stream image (the run's mail had none), and a
+    throttled round.
+
 ## Handoff
 
-- Steps 1, 2, and 3 are committed and pushed on `feature/bulk-reader-slips`
-  (draft PR #6). Nothing is uncommitted.
-- Step 4 is not done and waits on the operator: a small read round (one or
-  two batches) in a repo with a mailbox configured, with this branch
-  installed. It checks three things: the readers call `{cli} uri` for every
-  read and make no eleventh call; `import` prints `last read round:` (proof
-  that live captures carry `agent_id` and `duration_ms`); and the returns
-  put notes below `---`.
+- Steps 1 to 4 are done, committed, and pushed on `feature/bulk-reader-slips`
+  (PR #6). Nothing is uncommitted.
 - Open questions:
-  1. Should the plan be marked implemented without step 4, leaving the live
-     check for after the merge, or held until the round is run?
+  1. Should the plan be marked implemented without step 4? Settled
+     2026-10-10: the live round was run instead (see Log).
+- Not verified live: an octet-stream image attachment, and a throttled
+  round. Unit tests cover the first.
+- Remaining: review of PR #6, then `/planners close`.
