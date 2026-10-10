@@ -50,6 +50,15 @@ main session verifying and committing.
 3. Codex revision pass if needed, with a numbered list.
 4. Commit in logical chunks; raise contract-level naming findings with the user.
 
+### Scope extension (2026-10-10)
+
+After the first review the owner decided the contract-level findings, and
+the same branch carries them: the frozen-interface constraint above held for
+passes 1 and 2 only. The renames, removals, and step and key changes that
+followed are consumer-visible and listed in `CHANGELOG.md` under
+*Changed* and *Removed*; the Log entries of 12:31 and 12:50 record each
+decision.
+
 ## Log
 
 - **2026-10-10T11:46:24-07:00** — Activated.
@@ -109,14 +118,14 @@ main session verifying and committing.
     changelog entries. 481 tests; ruff and pyrefly strict clean.
 - **2026-10-10T12:32:02-07:00** — Implemented: 13 commits ahead of `dev`.
 - **2026-10-10T12:49:26-07:00** — Reactivated: back to active after review.
-
-- **2026-10-10T12:50:04-07:00** — Question 7 answered: the owner renamed the `classify`
-  role `system` to `automated`, matching the timeline key. `senders` keeps
-  its `system` mark, which names `system_senders` membership, not the role.
+- **2026-10-10T12:50:04-07:00** — Question 7 answered: the owner renamed
+  the `classify` role `system` to `automated`, matching the timeline key.
+  `senders` keeps its `system` mark, which names `system_senders`
+  membership, not the role.
 - **2026-10-10T12:50:07-07:00** — Implemented: 17 commits ahead of `dev`.
 
 ## Handoff
 
 All work for this plan is committed on
 `feature/package-review-simplification` (PR #9). Questions 1-7 are settled
-(Log entries of 12:31 and the one above); nothing is open.
+(Log entries of 12:31 and 12:50); nothing is open.
