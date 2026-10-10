@@ -5,7 +5,7 @@ status: active
 branch: feature/package-review-simplification
 created: 2026-10-10T11:46:13-07:00
 concluded:
-pr:
+pr: https://github.com/gitronald/outlooks/pull/9
 ---
 
 # Review the package ontology and simplify the code
@@ -81,6 +81,7 @@ main session verifying and committing.
     format). New internal helpers: `store.message_path`,
     `classify.direction` and `classify.is_automated` (moved from `lookup`).
   - 443 tests at the start, 470 at the end; ruff and pyrefly strict clean.
+- **2026-10-10T12:04:47-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/9
 
 ## Handoff
 
