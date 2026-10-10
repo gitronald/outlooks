@@ -257,9 +257,9 @@ for mid, message in messages.items():
 ```
 
 `classify` reports the role a message plays (`arrival`, `followup`, `ours`,
-`decision`, `system`) and stops there. What a system sender's notification
-says is the repo's own business, and the place for it is a thin wrapper in
-the repo. For a ticketing system whose notices read "Ticket #12 was opened
+`decision`, `automated`) and stops there. What a system sender's
+notification says is the repo's own business, and the place for it is a thin
+wrapper in the repo. For a ticketing system whose notices read "Ticket #12 was opened
 by ...":
 
 ```python
@@ -273,7 +273,7 @@ OPENED = re.compile(r"Ticket #(\d+) was opened by (.+?)\.")
 def facts(payload):
     mail = cl.view(payload)
     base = cl.classify(mail)
-    if base.role != "system":
+    if base.role != "automated":
         return base.role, None
     found = OPENED.search(mail.text)
     return ("system-opened", int(found[1])) if found else ("system-other", None)
@@ -281,7 +281,7 @@ def facts(payload):
 
 A `followup` carries `extra["auto"]`, true for an automatic reply.
 `is_auto_reply(subject)` is the same test for a repo that has only the
-subject in hand. A `system` message from one of `notice_senders` carries
+subject in hand. An `automated` message from one of `notice_senders` carries
 `extra["notice"]`, true. `config.is_system_sender(address)` and
 `config.is_notice_sender(address)` say which kind of sender an address is,
 patterns included, which `address in settings().system_senders` does not.

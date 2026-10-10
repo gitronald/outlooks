@@ -38,6 +38,9 @@ what a consuming repo has to do about it:
   `automated=` in its place. A repo whose own code or brief reads or writes
   the key renames it; timeline files already in the scratch directory are
   rebuilt by the next lookup.
+- The `classify` role `system` is now `automated`, matching the timeline
+  key: it covers mail from notice senders as well as system senders. A repo
+  that compares `Facts.role` with `"system"` compares it with `"automated"`.
 - `outlooks split --batches <dir>` removes that lookup's earlier
   `{name}-batch-NN.txt` files before writing new ones, so a repeat lookup
   with fewer unread hits leaves no stale batch behind. Other lookups' batches

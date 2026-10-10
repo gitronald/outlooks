@@ -115,7 +115,7 @@ DEFAULTS = {
     "timezone": "America/Los_Angeles",
     "render_label": "Message",
 }
-ROLES = {"arrival", "followup", "ours", "decision", "system"}
+ROLES = {"arrival", "followup", "ours", "decision", "automated"}
 
 
 def module(name):
