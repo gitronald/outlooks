@@ -1,7 +1,7 @@
 ---
 id: 2
 slug: package-review-simplification
-status: active
+status: implemented
 branch: feature/package-review-simplification
 created: 2026-10-10T11:46:13-07:00
 concluded:
@@ -113,6 +113,7 @@ main session verifying and committing.
 - **2026-10-10T12:50:04-07:00** — Question 7 answered: the owner renamed the `classify`
   role `system` to `automated`, matching the timeline key. `senders` keeps
   its `system` mark, which names `system_senders` membership, not the role.
+- **2026-10-10T12:50:07-07:00** — Implemented: 17 commits ahead of `dev`.
 
 ## Handoff
 
