@@ -1,10 +1,10 @@
 ---
 id: 2
 slug: package-review-simplification
-status: implemented
+status: done
 branch: feature/package-review-simplification
 created: 2026-10-10T11:46:13-07:00
-concluded:
+concluded: 2026-10-10T13:01:35-07:00
 pr: https://github.com/gitronald/outlooks/pull/9
 ---
 
@@ -123,9 +123,42 @@ decision.
   `senders` keeps its `system` mark, which names `system_senders`
   membership, not the role.
 - **2026-10-10T12:50:07-07:00** — Implemented: 17 commits ahead of `dev`.
+- **2026-10-10T13:01:43-07:00** — Close review gate: `/code-review` at
+  medium on PR #9 (two finders, five verifiers), posted to the PR.
+  - Review follow-up: 12 candidates, 3 survived verification.
+  - Fixed (`ff72195`): `window_plan.load` caught `ValueError`, `TypeError`,
+    and `KeyError` but not the `AttributeError` that `parse_ts` raises on a
+    non-string date, so a `windows.json` with `"after": 5` or a null bound
+    still printed a traceback. It now catches that too; a case was added to
+    `test_load_refuses_a_state_file_that_does_not_parse` and failed before
+    the fix.
+  - No-op: `capture._blocks` marks a whole response LOST on any non-text
+    block. That is intended and pinned by
+    `test_unrecoverable_blocks_never_prove_an_empty_window`, and the
+    connector returns image reads as a text note.
+  - No-op: `worklist.audit` builds the attachment text path by hand; this
+    predates the plan and is outside its diff.
+  - 482 tests; ruff, ruff format, and pyrefly strict clean.
 
 ## Handoff
 
-All work for this plan is committed on
-`feature/package-review-simplification` (PR #9). Questions 1-7 are settled
+All work for this plan is merged through PR #9. Questions 1-7 are settled
 (Log entries of 12:31 and 12:50); nothing is open.
+
+## Retrospective
+
+- A frozen-interface brief kept Codex's first pass safe, but the most
+  valuable findings were the interface ones it could only report. Settling
+  them on the same branch (the scope extension) cost one more round and
+  avoided a second plan for the renames.
+- Codex reproduced the failure modes the brief warned about in new forms
+  (an alias kept for old imports, a helper moved without its rename). A
+  numbered revision list fixed all seven in one pass, so a short targeted
+  second brief beats a long first one.
+- Codex hit its usage limit mid-pass and left no report. Reading its
+  partial diff in full before finishing by hand was what caught the
+  rewritten `Window.end` rationale.
+- The close review's one confirmed bug was in a fix this plan added: an
+  error path widened for malformed input that missed one exception type.
+  When a fix adds an `except` clause, test it with wrong-typed values as
+  well as missing ones.
