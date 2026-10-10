@@ -365,7 +365,14 @@ def test_load_refuses_a_folder_with_no_plan(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "content", ["{not json", "[]", '{"mailbox": "desk@example.org"}']
+    "content",
+    [
+        "{not json",
+        "[]",
+        '{"mailbox": "desk@example.org"}',
+        '{"mailbox": "desk@example.org", "after": 5, "before": null,'
+        ' "total": null, "pieces": []}',
+    ],
 )
 def test_load_refuses_a_state_file_that_does_not_parse(tmp_path, content):
     (tmp_path / "windows.json").write_text(content, encoding="utf-8")

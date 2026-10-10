@@ -317,5 +317,6 @@ def load(folder: Path) -> Plan:
                 for p in data["pieces"]
             ],
         )
-    except (ValueError, TypeError, KeyError) as e:
+    # AttributeError: a date that is not a string (``parse_ts`` calls ``replace``).
+    except (ValueError, TypeError, KeyError, AttributeError) as e:
         raise PlanError(f"{path} does not parse ({e!r}); fix or remove it") from None
