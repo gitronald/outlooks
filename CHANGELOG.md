@@ -23,6 +23,8 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-10
+
 ### Changed
 
 - The sweep's step `worklist` is now `approval`, and the lookup's step
