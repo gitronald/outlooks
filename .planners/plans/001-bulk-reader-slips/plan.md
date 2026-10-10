@@ -1,8 +1,8 @@
 ---
 id: 1
 slug: bulk-reader-slips
-status: draft
-branch:
+status: active
+branch: feature/bulk-reader-slips
 created: 2026-10-10T00:34:31-07:00
 concluded:
 pr:
@@ -113,3 +113,11 @@ might fix", or "never tried".
 - Changing the read round size or the throttle limits.
 - Automating round orchestration (launching the next round when the last
   finishes). That is the host's job, not this package's.
+
+## Log
+
+- **2026-10-10T00:46:54-07:00** — Activated.
+  - Branch: `feature/bulk-reader-slips`
+  - Base: `dev` at `5ccc35e`
+  - Worktree: `.worktrees/bulk-reader-slips`
+  - PR: pending
