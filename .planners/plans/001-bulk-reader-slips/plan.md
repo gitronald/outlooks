@@ -5,7 +5,7 @@ status: active
 branch: feature/bulk-reader-slips
 created: 2026-10-10T00:34:31-07:00
 concluded:
-pr:
+pr: https://github.com/gitronald/outlooks/pull/6
 ---
 
 # Harden bulk readers against parallel calls and retyped uris
@@ -121,3 +121,4 @@ might fix", or "never tried".
   - Base: `dev` at `5ccc35e`
   - Worktree: `.worktrees/bulk-reader-slips`
   - PR: pending
+- **2026-10-10T00:49:47-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/6
