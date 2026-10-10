@@ -122,3 +122,46 @@ might fix", or "never tried".
   - Worktree: `.worktrees/bulk-reader-slips`
   - PR: pending
 - **2026-10-10T00:49:47-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/6
+- **2026-10-10T00:56:53-07:00** — Steps 1 to 3 implemented and pushed;
+  step 4 not run.
+  - Audit (5, 6): `capture.is_image` treats an attachment as an image by
+    `image/*` type, a placeholder name (`PNG image`, `img-<uuid>`), or an
+    image or design extension. `audit` and `import` both use it, so an
+    octet-stream image is neither swept nor filed. `worklist.binary_ids`
+    finds attachment reads that got the "Binary attachment" note; `audit`
+    counts those under `binary` by type, not as MISSING or UNTRIED.
+  - Retyping (2, 3) and return format (4): new command `outlooks uri
+    <worklist> <NAME>` prints one line's uri and refuses a NAME the file
+    does not hold, naming the range it does. A new top-level command was
+    chosen over `worklist next`: `worklist` is a command with required
+    options, so it cannot also be a group. The bulk reader brief now opens
+    with both rules, lists NAMEs with `cut` instead of `cat`, fetches each
+    uri with `{cli} uri` right before the call, and fences notes below a
+    `---` line. The window skill's `read-launch` prompt drops "cat it first".
+  - Parallelism (1): the Claude Code hooks reference documents `agent_id`
+    and `agent_type` in a hook's input when it fires inside a subagent, plus
+    `duration_ms` on PostToolUse. The capture hook writes its input verbatim,
+    so captures already carry them; no hook change was needed. `Capture`
+    parses both; `worklist.last_round` groups subagent reads into the newest
+    round (readers whose spans overlap) and counts, per reader, reads that
+    started before another of its own had ended. `import` prints `last read
+    round:` and, when any, `PARALLEL reads by N of M readers`.
+  - Not verified: that live captures carry `agent_id` and `duration_ms` (it
+    rests on the docs, not on a recorded capture), and the new brief end to
+    end (step 4).
+  - Checks: `uv run pytest` 437 passed; ruff check, ruff format, and pyrefly
+    clean.
+
+## Handoff
+
+- Steps 1, 2, and 3 are committed and pushed on `feature/bulk-reader-slips`
+  (draft PR #6). Nothing is uncommitted.
+- Step 4 is not done and waits on the operator: a small read round (one or
+  two batches) in a repo with a mailbox configured, with this branch
+  installed. It checks three things: the readers call `{cli} uri` for every
+  read and make no eleventh call; `import` prints `last read round:` (proof
+  that live captures carry `agent_id` and `duration_ms`); and the returns
+  put notes below `---`.
+- Open questions:
+  1. Should the plan be marked implemented without step 4, leaving the live
+     check for after the merge, or held until the round is run?
