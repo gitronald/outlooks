@@ -195,7 +195,7 @@ def test_read_worklist_replaces_earlier_batch_files(tmp_path):
     assert not (out / "batch-02.txt").exists()
 
 
-# --- attempted_ids and audit -----------------------------------------------------
+# --- attachment_reads and audit --------------------------------------------------
 
 
 def test_audit_counts_texts_missing_untried_and_bad_files():
@@ -274,14 +274,14 @@ def test_audit_counts_texts_missing_untried_and_bad_files():
     assert result.bad == ["badfile.json"]
 
 
-def test_attempted_ids_reads_the_attachment_id_from_a_read_capture():
+def test_attachment_reads_takes_the_attachment_id_from_a_read_capture():
     write_capture(
         "20260901T090000",
         READ,
         {"uri": f"mail:///messages/M1%3D/attachments/A9?owner={BOX}"},
         "some text",
     )
-    assert wl.attempted_ids() == {"A9"}
+    assert wl.attachment_reads() == ({"A9"}, set())
 
 
 @pytest.mark.parametrize("ctype", wl.CALENDAR)
@@ -356,21 +356,27 @@ def test_audit_counts_a_binary_note_apart_from_missing(ctype):
     assert (result.missing, result.listed, result.untried) == ({}, [], [])
 
 
-def test_binary_ids_ignores_a_read_that_returned_text():
+def test_attachment_reads_takes_only_the_connector_s_note_as_binary():
+    # Text that mentions the note, or the parent message read back in place of
+    # the attachment, is not the note: those reads are tried, not binary.
     owner = f"?owner={BOX}"
-    write_capture(
-        "20260901T090000",
-        READ,
-        {"uri": f"mail:///messages/M1%3D/attachments/A1{owner}"},
-        "the letter",
-    )
-    write_capture(
-        "20260901T090001",
-        READ,
-        {"uri": f"mail:///messages/M1%3D/attachments/A2{owner}"},
-        "Binary attachment",
-    )
-    assert wl.binary_ids() == {"A2"}
+    reads = {
+        "A1": "the letter",
+        "A2": {
+            "note": "Binary attachment; content is not available as text.",
+            "attachment": {"name": "report.pdf", "contentType": "application/pdf"},
+        },
+        "A3": "Note: a binary attachment was removed from this message.",
+        "A4": {**message(1), "bodyPreview": "Binary attachment: see below"},
+    }
+    for n, (att, response) in enumerate(reads.items()):
+        write_capture(
+            f"20260901T09000{n}",
+            READ,
+            {"uri": f"mail:///messages/M1%3D/attachments/{att}{owner}"},
+            response,
+        )
+    assert wl.attachment_reads() == (set(reads), {"A2"})
 
 
 # --- the quiet period ------------------------------------------------------------

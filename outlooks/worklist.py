@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,7 +22,13 @@ from typing import Any
 from urllib.parse import unquote
 
 from outlooks import config, store
-from outlooks.capture import Capture, captured_dir, is_image, load_captures
+from outlooks.capture import (
+    Capture,
+    captured_dir,
+    is_image,
+    load_captures,
+    read_capture,
+)
 from outlooks.coverage import (
     Window,
     is_window,
@@ -300,34 +305,35 @@ def line_uri(worklist: Path, name: str) -> str:
     raise WorklistError(f"no line {name} in {worklist} (its names: {held})")
 
 
-def _attachment_reads(folder: Path | None) -> Iterator[tuple[str, Any]]:
-    """(attachment id, tool_response) for each captured attachment read."""
-    for path in (folder or captured_dir()).glob("*.json"):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            uri = payload.get("tool_input", {}).get("uri", "")
-        except (ValueError, AttributeError):
-            continue
-        match = ATTACHMENT_ID.search(uri or "")
-        if match:
-            yield unquote(match.group(1)), payload.get("tool_response")
+def _is_binary_note(block: Any) -> bool:
+    """Whether a result block is the connector's note for a binary attachment."""
+    return (
+        isinstance(block, dict)
+        and "attachment" in block
+        and str(block.get("note") or "").lower().startswith(BINARY_NOTE)
+    )
 
 
-def attempted_ids(folder: Path | None = None) -> set[str]:
-    """Attachment ids any captured ``read_resource`` call asked for."""
-    return {att_id for att_id, _ in _attachment_reads(folder)}
+def attachment_reads(folder: Path | None = None) -> tuple[set[str], set[str]]:
+    """Attachment ids captured reads asked for, and those that got the binary note.
 
-
-def binary_ids(folder: Path | None = None) -> set[str]:
-    """Attachment ids a captured read got the connector's binary note for.
-
-    A re-read returns the same note, so such an attachment never gets text.
+    A re-read of one that got the note returns the note again, so it never gets
+    text. The note is matched as the connector's block, not as a phrase, so
+    text that mentions it (or the parent message read back instead) is not one.
     """
-    return {
-        att_id
-        for att_id, response in _attachment_reads(folder)
-        if BINARY_NOTE in json.dumps(response).lower()
-    }
+    tried: set[str] = set()
+    binary: set[str] = set()
+    for path in (folder or captured_dir()).glob("*.json"):
+        c = read_capture(path)
+        uri = c.args.get("uri") if c and isinstance(c.args, dict) else None
+        match = ATTACHMENT_ID.search(uri) if isinstance(uri, str) else None
+        if c is None or match is None:
+            continue
+        att_id = unquote(match.group(1))
+        tried.add(att_id)
+        if any(_is_binary_note(b) for b in c.blocks):
+            binary.add(att_id)
+    return tried, binary
 
 
 @dataclass
@@ -356,8 +362,7 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
     any message file that does not parse.
     """
     messages = (archive or store.archive_root()) / "messages"
-    tried = attempted_ids()
-    binary = binary_ids()
+    tried, binary = attachment_reads()
     result = Audit()
     for path in sorted(messages.glob("*.json")):
         try:
