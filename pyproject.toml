@@ -1,11 +1,11 @@
 [project]
 name = "outlooks"
-version = "0.4.0"
+version = "0.5.0"
 description = "Archive and read an Outlook mailbox through the Microsoft 365 connector, with the Claude Code skill that drives it."
 authors = [
     {name = "gitronald", email = "gitronald@users.noreply.github.com"}
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "pkgskills>=0.5.1,<0.6.0",
     "typer>=0.15.0",
@@ -62,7 +62,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
@@ -75,7 +75,7 @@ select = [
 
 [tool.pyrefly]
 preset = "strict"
-python-version = "3.11"
+python-version = "3.12"
 project-includes = ["."]
 project-excludes = ["**/__pycache__", "**/.venv"]
 

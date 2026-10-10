@@ -123,7 +123,10 @@ is named in the report for the operator to drag in by hand.
 
 An attachment the connector returns as an image rather than text — an inline
 signature logo, an institution banner (`isInline: true`, `image/png`) — gets
-**no text file at all**. Never write a caption, a transcription of the
+**no text file at all**. Some images come as `application/octet-stream`
+under a placeholder name (`PNG image`, `JPEG image`, `img-<uuid>`) or with an
+image or design file's extension (`.png`, `.jpg`, `.gif`, `.svg`, `.ai`,
+`.psd`): these are images too, whatever their `contentType`. Never write a caption, a transcription of the
 visible words, or a note explaining that the image had no text: the `.txt`
 beside a message is what the connector extracted, and a hand-written
 stand-in in that slot is indistinguishable from real attachment text on a
@@ -140,7 +143,11 @@ extraction failed"). The note is not attachment text: `import` refuses it
 
 A calendar invite (`text/calendar`, `application/ics`, a `.ics` file) always
 comes back as a "Binary attachment" note, never text: skip its read like an
-image's. `{cli} audit` counts it as missing but never lists it for a re-read.
+image's. `{cli} audit` counts a skipped invite as missing but never lists it
+for a re-read. Any attachment that a read got the "Binary attachment" note
+for (a scheduled report's PDF, say, or an invite read anyway) gets the same
+note on every re-read, so `{cli} audit` counts it under `binary`, by type,
+rather than as missing.
 
 A result too large for the context (a long thread, about 55k characters or
 more) reaches the hook only as a note naming the file Claude Code saved it

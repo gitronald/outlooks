@@ -210,6 +210,31 @@ def test_cli_worklist_refuses_a_malformed_date(tmp_path):
     assert not (tmp_path / "out").exists()
 
 
+def test_cli_uri_prints_one_line_s_uri_verbatim(tmp_path):
+    batch = tmp_path / "batch-01.txt"
+    first = "mail:///messages/AAMkADc0%3D?owner=desk%40example.org"
+    second = "mail:///messages/AAMkADc1%3D?owner=desk%40example.org"
+    batch.write_text(f"aug-001 {first}\naug-002 {second}\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["uri", str(batch), "aug-002"])
+    assert result.exit_code == 0, result.output
+    assert result.output == f"{second}\n"
+
+
+def test_cli_uri_refuses_a_name_past_the_last_line(tmp_path):
+    batch = tmp_path / "batch-01.txt"
+    batch.write_text("aug-001 mail:///messages/A\naug-002 mail:///messages/B\n")
+
+    result = runner.invoke(app, ["uri", str(batch), "aug-003"])
+    assert result.exit_code == 1
+    assert "no line aug-003" in result.output
+    assert "(its names: aug-001 to aug-002)" in result.output
+
+    result = runner.invoke(app, ["uri", str(tmp_path / "gone.txt"), "aug-001"])
+    assert result.exit_code == 1
+    assert "gone.txt" in result.output
+
+
 def test_cli_totals_lists_window_sizes_by_prefix():
     pull_the_window()
     result = runner.invoke(app, ["totals", "2026-03"])

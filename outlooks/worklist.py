@@ -22,7 +22,13 @@ from typing import Any
 from urllib.parse import unquote
 
 from outlooks import config, store
-from outlooks.capture import Capture, captured_dir, load_captures
+from outlooks.capture import (
+    Capture,
+    captured_dir,
+    is_image,
+    load_captures,
+    read_capture,
+)
 from outlooks.coverage import (
     Window,
     is_window,
@@ -37,6 +43,8 @@ from outlooks.coverage import (
 CALENDAR = ("text/calendar", "application/ics")
 NO_TEXT = ("message/rfc822", "application/zip", "multipart/signed", *CALENDAR)
 ATTACHMENT_ID = re.compile(r"/attachments/([^?]+)")
+# What the connector returns, lowercased, for an attachment it has no text for.
+BINARY_NOTE = "binary attachment"
 # How long the connector must have been quiet before worklists are rebuilt.
 QUIET = timedelta(seconds=90)
 
@@ -197,25 +205,142 @@ def read_worklist(
     return result
 
 
-def attempted_ids(folder: Path | None = None) -> set[str]:
-    """Attachment ids any captured ``read_resource`` call asked for."""
-    ids: set[str] = set()
-    for path in (folder or captured_dir()).glob("*.json"):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            uri = payload.get("tool_input", {}).get("uri", "")
-        except (ValueError, AttributeError):
+@dataclass
+class Round:
+    """The last round of reader subagents, from their captured reads."""
+
+    reads: int
+    start: datetime
+    end: datetime
+    # agent id -> the reads it made while another of its own was in flight
+    parallel: dict[str, int]
+    readers: int
+
+    @property
+    def per_minute(self) -> float:
+        minutes = (self.end - self.start).total_seconds() / 60
+        return self.reads / minutes if minutes > 0 else float(self.reads)
+
+
+# A call's start, when the hook was not told how long it ran: a read finishing
+# this soon after another of the same reader's was made beside it, since a
+# reader that waits for each result takes seconds to make its next call.
+UNTIMED = timedelta(seconds=1)
+
+
+def last_round(captures: list[Capture]) -> Round | None:
+    """The newest round of reads by subagents, and which of them ran in parallel.
+
+    Each read runs from its capture's write time back by its ``duration_ms``. A
+    round is the readers whose spans overlap, one after another, ending with the
+    newest; a read that starts before another of the same reader's has ended
+    was made in parallel with it. Reads by the main session, which carry no
+    ``agent_id``, are left out, and a call captured twice counts once. None
+    when no read carries an ``agent_id``.
+    """
+    calls: dict[str, list[tuple[datetime, datetime]]] = {}
+    seen: set[str] = set()
+    for c in captures:
+        if c.tool != "read" or c.agent_id is None:
             continue
-        match = ATTACHMENT_ID.search(uri or "")
-        if match:
-            ids.add(unquote(match.group(1)))
-    return ids
+        if c.tool_use_id is not None:
+            if c.tool_use_id in seen:
+                continue
+            seen.add(c.tool_use_id)
+        end = datetime.fromtimestamp(c.path.stat().st_mtime, UTC)
+        ran = (
+            UNTIMED if c.duration_ms is None else timedelta(milliseconds=c.duration_ms)
+        )
+        calls.setdefault(c.agent_id, []).append((end - ran, end))
+    if not calls:
+        return None
+    spans = sorted(
+        (min(s for s, _ in own), max(e for _, e in own), agent)
+        for agent, own in calls.items()
+    )
+    group: list[str] = []
+    until = spans[0][1]
+    for start, end, agent in spans:
+        if start > until:
+            group = []
+        group.append(agent)
+        until = max(until, end)
+    reads = [span for agent in group for span in calls[agent]]
+    parallel: dict[str, int] = {}
+    for agent in group:
+        busy = None
+        for start, end in sorted(calls[agent], key=lambda span: span[1]):
+            if busy is not None and start < busy:
+                parallel[agent] = parallel.get(agent, 0) + 1
+            busy = end if busy is None else max(busy, end)
+    return Round(
+        reads=len(reads),
+        start=min(s for s, _ in reads),
+        end=max(e for _, e in reads),
+        parallel=parallel,
+        readers=len(group),
+    )
+
+
+def line_uri(worklist: Path, name: str) -> str:
+    """The uri on the worklist line named ``name``, exactly as written.
+
+    A reader passes this to ``read_resource`` instead of copying the uri out of
+    a listing of the whole file: the ids are long and differ near the end, so a
+    retyped one reads a neighbouring message. A name not in the file is refused
+    with the names it does hold, so a call past the last line reads nothing.
+    """
+    try:
+        text = worklist.read_text(encoding="utf-8")
+    except OSError as e:
+        raise WorklistError(f"{worklist}: {e.strerror or e}") from None
+    names: list[str] = []
+    for line in text.splitlines():
+        key, _, uri = line.strip().partition(" ")
+        if key == name and uri.strip():
+            return uri.strip()
+        if key:
+            names.append(key)
+    held = f"{names[0]} to {names[-1]}" if names else "none"
+    raise WorklistError(f"no line {name} in {worklist} (its names: {held})")
+
+
+def _is_binary_note(block: Any) -> bool:
+    """Whether a result block is the connector's note for a binary attachment."""
+    return (
+        isinstance(block, dict)
+        and "attachment" in block
+        and str(block.get("note") or "").lower().startswith(BINARY_NOTE)
+    )
+
+
+def attachment_reads(folder: Path | None = None) -> tuple[set[str], set[str]]:
+    """Attachment ids captured reads asked for, and those that got the binary note.
+
+    A re-read of one that got the note returns the note again, so it never gets
+    text. The note is matched as the connector's block, not as a phrase, so
+    text that mentions it (or the parent message read back instead) is not one.
+    """
+    tried: set[str] = set()
+    binary: set[str] = set()
+    for path in (folder or captured_dir()).glob("*.json"):
+        c = read_capture(path)
+        uri = c.args.get("uri") if c and isinstance(c.args, dict) else None
+        match = ATTACHMENT_ID.search(uri) if isinstance(uri, str) else None
+        if c is None or match is None:
+            continue
+        att_id = unquote(match.group(1))
+        tried.add(att_id)
+        if any(_is_binary_note(b) for b in c.blocks):
+            binary.add(att_id)
+    return tried, binary
 
 
 @dataclass
 class Audit:
     counts: Counter[str] = field(default_factory=Counter)
     missing: Counter[str] = field(default_factory=Counter)
+    binary: Counter[str] = field(default_factory=Counter)
     listed: list[str] = field(default_factory=list)
     untried: list[tuple[str, str, str]] = field(default_factory=list)
     image_slots: list[str] = field(default_factory=list)
@@ -225,16 +350,19 @@ class Audit:
 def audit(prefix: str, *, archive: Path | None = None) -> Audit:
     """Attachment texts for the archived messages received in ``prefix``.
 
-    Counts the text-bearing attachments (not inline, not ``image/*``) and how
-    many have their ``{id-hash}.{n}.txt``. A missing one that is not an attached
-    email, a zip, an S/MIME signature, or a calendar invite is listed by name,
-    since those are the ones a re-read might fill; one no capture ever tried to
-    read (signatures and invites aside) is a reader's skip, not the connector's
-    refusal. Also lists a text
-    file sitting in an image's slot and any message file that does not parse.
+    Counts the text-bearing attachments (not inline, not an image by
+    :func:`~outlooks.capture.is_image`) and how many have their
+    ``{id-hash}.{n}.txt``. One without text that a read got the connector's
+    binary note for is counted under ``binary``, by type, and not as missing: a
+    re-read returns the same note. Any other missing one that is not an
+    attached email, a zip, an S/MIME signature, or a calendar invite is listed
+    by name, since those are the ones a re-read might fill; one no capture ever
+    tried to read (signatures and invites aside) is a reader's skip, not the
+    connector's refusal. Also lists a text file sitting in an image's slot and
+    any message file that does not parse.
     """
     messages = (archive or store.archive_root()) / "messages"
-    tried = attempted_ids()
+    tried, binary = attachment_reads()
     result = Audit()
     for path in sorted(messages.glob("*.json")):
         try:
@@ -248,7 +376,7 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
         for n, att in enumerate(message.get("attachments") or [], 1):
             ctype = str(att.get("contentType", ""))
             has_text = (messages / f"{path.stem}.{n}.txt").exists()
-            if att.get("isInline") or ctype.startswith("image/"):
+            if att.get("isInline") or is_image(att):
                 if has_text:
                     result.image_slots.append(f"{path.stem}.{n}")
                 continue
@@ -256,12 +384,14 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
             if has_text:
                 result.counts["with text"] += 1
                 continue
+            match = ATTACHMENT_ID.search(att.get("uri") or "")
+            att_id = unquote(match.group(1)) if match else None
+            if att_id in binary:
+                result.binary[ctype or "?"] += 1
+                continue
             result.missing[ctype or "?"] += 1
             if ctype not in NO_TEXT:
                 result.listed.append(f"{path.stem}.{n}  {ctype}  {att.get('name')}")
-            match = ATTACHMENT_ID.search(att.get("uri") or "")
-            if ctype not in ("multipart/signed", *CALENDAR) and not (
-                match and unquote(match.group(1)) in tried
-            ):
+            if ctype not in ("multipart/signed", *CALENDAR) and att_id not in tried:
                 result.untried.append((f"{path.stem}.{n}", ctype, att.get("uri")))
     return result

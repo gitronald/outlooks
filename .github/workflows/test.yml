@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.12", "3.13", "3.14"]
     # UV_PYTHON outranks the .python-version pin for uv sync and every uv run,
     # so each matrix cell actually tests its own interpreter. Without it,
     # bare `uv run` re-resolves to .python-version and every cell silently

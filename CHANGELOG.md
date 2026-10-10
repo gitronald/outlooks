@@ -23,6 +23,42 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
+### Added
+
+- `outlooks uri <worklist> <NAME>` prints one worklist line's uri, and
+  refuses a NAME the file does not hold. The bulk reader brief has each
+  reader run it right before every read instead of copying the uri out of
+  the whole file, so a retyped uri can no longer read a neighbouring message
+  and a call past the last line reads nothing.
+- `outlooks import` prints a `last read round:` line (the newest round of
+  reader subagents, its reads, and its calls a minute) and, under it, a
+  `PARALLEL reads` line for readers that made a call while another of their
+  own was in flight. Both come from the `agent_id` and `duration_ms` that
+  Claude Code passes the capture hook, which the hook already keeps.
+
+### Changed
+
+- outlooks now needs Python 3.12 or later. Python 3.11 is no longer
+  supported or tested.
+- The bulk reader brief opens with its two rules (one call at a time, never
+  retype a uri), lists the NAMEs with `cut` rather than `cat`ting the
+  worklist, and puts any notes below a `---` line after the status lines.
+  A repo that launches readers with "cat it first" in their prompt should
+  drop that clause (the window skill's `read-launch` step no longer has it).
+
+### Fixed
+
+- `outlooks audit` and `outlooks import` treat an attachment as an image when
+  its name is a connector placeholder (`PNG image`, `img-<uuid>`) or ends in
+  an image or design file's extension, whatever its `contentType`. The audit
+  no longer lists these images as missing or puts them in the `--sweep`
+  worklist, and `import` refuses a read of one.
+- `outlooks audit` counts an attachment that a read got the connector's
+  "Binary attachment" note for on a `binary (no text to read) by type` line,
+  instead of listing it as `MISSING` on every run.
+
 ## [0.4.0] - 2026-09-29
 
 ### Added

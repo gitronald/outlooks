@@ -13,7 +13,7 @@ the mailbox so that the archive fills itself.
 
 ## Install
 
-Python 3.11 or later. `render` needs [pandoc](https://pandoc.org) on the PATH.
+Python 3.12 or later. `render` needs [pandoc](https://pandoc.org) on the PATH.
 
 There are two recipes, one for each way a repo uses the package. Both pin a
 release.
@@ -203,6 +203,7 @@ so one repair never rewrites anything else that differs.
 | `outlooks check <name>` | a lookup's timeline files against the archive |
 | `outlooks lookup-reset <name>` | move a lookup's page and timeline files aside before a repeat lookup |
 | `outlooks worklist --after --before --out` | reader worklists for a full read of a range |
+| `outlooks uri <worklist> <NAME>` | one worklist line's uri, for a reader to pass on verbatim |
 | `outlooks totals [prefix ...]` / `--check AFTER BEFORE` | window sizes; the item-id proof |
 | `outlooks windows init/fill/split/batches/remaining` | the backfill planner |
 | `outlooks audit <prefix> [--sweep]` | attachment-text audit for a period |
