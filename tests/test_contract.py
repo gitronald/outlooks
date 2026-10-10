@@ -267,6 +267,7 @@ COMMANDS = {
     "skill",
     "split",
     "totals",
+    "uri",
     "windows",
     "worklist",
 }

@@ -1,11 +1,11 @@
 ---
 id: 1
 slug: bulk-reader-slips
-status: active
+status: done
 branch: feature/bulk-reader-slips
 created: 2026-10-10T00:34:31-07:00
-concluded:
-pr:
+concluded: 2026-10-10T11:28:53-07:00
+pr: https://github.com/gitronald/outlooks/pull/6
 ---
 
 # Harden bulk readers against parallel calls and retyped uris
@@ -121,3 +121,104 @@ might fix", or "never tried".
   - Base: `dev` at `5ccc35e`
   - Worktree: `.worktrees/bulk-reader-slips`
   - PR: pending
+- **2026-10-10T00:49:47-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/6
+- **2026-10-10T00:56:53-07:00** — Steps 1 to 3 implemented and pushed;
+  step 4 not run.
+  - Audit (5, 6): `capture.is_image` treats an attachment as an image by
+    `image/*` type, a placeholder name (`PNG image`, `img-<uuid>`), or an
+    image or design extension. `audit` and `import` both use it, so an
+    octet-stream image is neither swept nor filed. `worklist.binary_ids`
+    finds attachment reads that got the "Binary attachment" note; `audit`
+    counts those under `binary` by type, not as MISSING or UNTRIED.
+  - Retyping (2, 3) and return format (4): new command `outlooks uri
+    <worklist> <NAME>` prints one line's uri and refuses a NAME the file
+    does not hold, naming the range it does. A new top-level command was
+    chosen over `worklist next`: `worklist` is a command with required
+    options, so it cannot also be a group. The bulk reader brief now opens
+    with both rules, lists NAMEs with `cut` instead of `cat`, fetches each
+    uri with `{cli} uri` right before the call, and fences notes below a
+    `---` line. The window skill's `read-launch` prompt drops "cat it first".
+  - Parallelism (1): the Claude Code hooks reference documents `agent_id`
+    and `agent_type` in a hook's input when it fires inside a subagent, plus
+    `duration_ms` on PostToolUse. The capture hook writes its input verbatim,
+    so captures already carry them; no hook change was needed. `Capture`
+    parses both; `worklist.last_round` groups subagent reads into the newest
+    round (readers whose spans overlap) and counts, per reader, reads that
+    started before another of its own had ended. `import` prints `last read
+    round:` and, when any, `PARALLEL reads by N of M readers`.
+  - Not verified: that live captures carry `agent_id` and `duration_ms` (it
+    rests on the docs, not on a recorded capture), and the new brief end to
+    end (step 4).
+  - Checks: `uv run pytest` 437 passed; ruff check, ruff format, and pyrefly
+    clean.
+
+- **2026-10-10T11:21:25-07:00** — Step 4: a live read round was run.
+  - Setup: one day's window was pulled and imported into a scratch archive
+    outside the repo, and worklists were built with `--per 4`. Two `sonnet`
+    readers ran batches 01 and 02 at once, launched with the `read-launch`
+    prompt as now worded. The capture hook was installed for the run only and
+    removed afterwards.
+  - Retyping: all 9 captured reads (8 messages, 1 attachment) match a
+    worklist line exactly. No call came after a reader's last NAME. Each
+    reader ran `outlooks uri` for every NAME and never `cat`ted the
+    worklist.
+  - Parallelism: every capture carries `agent_id`, `agent_type`, and
+    `duration_ms`, which confirms the docs. `import` printed `last read
+    round: 2 readers, 9 reads in 0m22s (24 a minute)`, with no PARALLEL
+    line. The captures confirm it: each reader's calls ran one at a time.
+  - Return format: both readers returned exactly four status lines, then a
+    `---` and their notes below it.
+  - Binary note: an octet-stream attachment (not an image) came back as the
+    "Binary attachment" note. `import` refused it as a connector note, and
+    `audit` counted it under `binary (no text to read)`, with nothing
+    missing and nothing untried.
+  - Not covered: an octet-stream image (the run's mail had none), and a
+    throttled round.
+- **2026-10-10T11:21:37-07:00** — Implemented: 9 commits ahead of `dev`.
+- **2026-10-10T11:29:08-07:00** — Closed after review.
+  - Review follow-up (`/code-review` at medium, posted to PR #6): five
+    findings, four fixed, one no-op.
+    - The `img-` branch of `IMAGE_NAME` took any suffix, so a document named
+      `img-deadbeef-report.docx` was treated as an image and its read
+      refused. Now only a whole uuid follows `img-` (2052740), with
+      `test_is_image_takes_only_a_whole_placeholder_name`.
+    - `binary_ids` searched the whole dumped response for the phrase, so
+      text mentioning it, or the parent message read back in place of the
+      attachment, counted as binary. The note is now matched as the
+      connector's block (2a5a1b7), with
+      `test_attachment_reads_takes_only_the_connector_s_note_as_binary`.
+    - `audit` parsed every capture twice. `attempted_ids` and `binary_ids`
+      became one `attachment_reads()` pass through `read_capture` (2a5a1b7).
+    - `connector.md` said audit counts a calendar invite as missing; a read
+      invite now counts under `binary`, and the text says so (108526e).
+    - No-op: `last_round` times reads by file mtime, which a restore without
+      mtimes would collapse. mtime is the only sub-second source (the hook's
+      filename stamp has whole seconds), nothing in the import flow rewrites
+      it, and the quiet-period check on `dev` already relies on it.
+  - Checks: ruff check, ruff format --check, pyrefly, and pytest (443
+    passed).
+
+## Handoff
+
+- Closed. Steps 1 to 4 and the review fixes are merged through PR #6.
+- Open questions:
+  1. Should the plan be marked implemented without step 4? Settled
+     2026-10-10: the live round was run instead (see Log).
+- Not verified live: an octet-stream image attachment, and a throttled
+  round. Unit tests cover the first.
+
+## Retrospective
+
+- The plan's "make it observable" bet for parallel reads paid off with no
+  hook change: Claude Code already passes `agent_id` and `duration_ms`, and
+  the verbatim capture kept them. Reading the hook docs before designing a
+  reader tag saved a step.
+- `worklist next` became a top-level `uri` command, because a Typer command
+  with required options cannot also be a group. Checking the CLI's shape
+  before naming a command in a plan would have caught it.
+- The live round was worth running before close: it confirmed the capture
+  fields and the new return format against real readers, which the unit
+  tests could only assume.
+- The review's two real bugs were both over-broad matches (a regex suffix,
+  a substring over a whole response). Classifiers that decide what gets
+  skipped deserve negative test cases from the start, not only positive ones.

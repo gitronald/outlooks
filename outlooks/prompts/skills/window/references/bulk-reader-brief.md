@@ -2,26 +2,40 @@
 
 Work from the repo root your launch prompt names; run every command there.
 
+Two rules come before everything else:
+
+- **One `read_resource` call at a time, never two in one turn.** Every
+  reader shares one rate limit on the connector, and the round is sized for
+  each reader to have one call in flight. The captures record every call's
+  timing by reader, so a parallel pair shows up after the round.
+- **Never type, retype, or copy a uri out of the worklist.** Get each one
+  from `{cli} uri` right before its call and pass what it printed. The ids
+  are long and differ near the end, so a retyped one reads a neighbouring
+  message.
+
 Load the tool schema first: ToolSearch query "select:mcp__claude_ai_Microsoft_365__read_resource".
 
-Your worklist file has lines `NAME <uri>`. Count them first
-(`wc -l <worklist>`): your return has exactly one line per worklist line,
-and a NAME missing from the middle of it is taken as done. Work through them
-one at a time, in order:
+Your worklist file has lines `NAME <uri>`. List its NAMEs with
+`cut -d' ' -f1 <worklist>` (don't `cat` it: you never need to see the
+uris). Your return has exactly one line per NAME, and a NAME missing from
+the middle of it is taken as done. Work through the NAMEs one at a time, in
+order, read each one once, and make no call after the last:
 
-1. `mcp__claude_ai_Microsoft_365__read_resource` on the uri, copied from the
-   worklist exactly (never retyped: a one-character slip reads a
-   neighbouring message). Do not write the result anywhere: a hook captures
-   every read verbatim, and the main session archives the captures
-   afterwards.
+1. Run `{cli} uri <worklist> <NAME>`, then
+   `mcp__claude_ai_Microsoft_365__read_resource` on exactly the uri it
+   printed. Do not write the result anywhere: a hook captures every read
+   verbatim, and the main session archives the captures afterwards.
 2. Attachments: go through the message's `attachments` list one entry at a
    time. For each entry, check its own `contentType` and `isInline` first,
    and read that same entry's own `uri` only if it carries text (a document,
    PDF, spreadsheet, or text file). Skip every image (`image/*`, or
    `isInline: true`), whether it is a signature logo, a banner, or a
-   screenshot. Don't match attachments to uris by position or by eye: taking
-   the uri from a neighbouring entry is how an image gets read. Never write a
-   caption or placeholder for an image. If an attachment uri returns the
+   screenshot, and every entry named like an image whatever its
+   `contentType` (`PNG image`, `JPEG image`, `img-<uuid>`, or a name ending
+   `.png`, `.jpg`, `.gif`, `.svg`, `.ai`, or `.psd`). Don't match
+   attachments to uris by position or by eye: taking the uri from a
+   neighbouring entry is how an image gets read. Never write a caption or
+   placeholder for an image. If an attachment uri returns the
    parent message JSON again instead of text, decode `%3D` to a literal `=`
    in both the message-id and attachment-id segments of the uri and read
    once more. Change nothing else: the uri keeps its shape,
@@ -38,14 +52,14 @@ one at a time, in order:
    note, count it as 0 texts and move on. A calendar invite (`text/calendar`, or a name ending `.ics`) always comes
    back as a "Binary attachment" note: skip it like an image.
 3. If a call returns HTTP 429 / throttling, run `sleep $((65 + RANDOM % 30))`
-   in Bash and retry the same uri; if that retry is throttled too,
+   in Bash and retry the same NAME (run `{cli} uri` for it again); if that
+   retry is throttled too,
    `sleep $((120 + RANDOM % 30))` (pass the Bash tool a `timeout` of 200000:
    the default two minutes is shorter than the sleep) and retry once more
    before marking it `failed`. The random part matters: other readers share
    the limit, and readers that all wake at the same second trip it again.
-   Make one call at a time, never in parallel. `failed` means the uri was
-   called and throttled three times; a line not yet called is not failed,
-   so call it before returning.
+   `failed` means the uri was called and throttled three times; a line not
+   yet called is not failed, so call it before returning.
 4. If a result is too large it comes back as a note that reads
    `Error: result (N characters ...) exceeds maximum allowed tokens. Output
    has been saved to <file>`. Despite the word "Error", the read succeeded:
@@ -56,13 +70,16 @@ one at a time, in order:
    more than once.
 
 If your launch prompt says the lines are attachment uris (an attachment
-sweep), read each uri directly as in step 2, and still skip any that turns
-out to be an image.
+sweep), get each one with `{cli} uri` as in step 1 and read it directly as
+an attachment (step 2), and still skip any that turns out to be an image.
 
 Rules: any Python you run is `uv run python`, never bare `python3`. Write no
 files at all, and nothing under the archive. Do not run `{cli} import` or
 `{cli} save`. Do not summarize message contents.
 
-Return only: one line per worklist line, in order, with its NAME, one word,
-`read`, `notfound`, or `failed`, and the number of attachment texts you read
-for it. Nothing else.
+Return exactly one line per NAME, in order, and nothing before them: its
+NAME, one word, `read`, `notfound`, or `failed`, and the number of
+attachment texts you read for it. If you have anything to report (a slip
+you made, a result that looked wrong), put a line `---` after the last NAME
+line and write it below that; the main session reads only the lines above
+`---`.

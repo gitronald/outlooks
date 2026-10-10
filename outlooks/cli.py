@@ -9,6 +9,7 @@
     outlooks check <name>
     outlooks lookup-reset <name>
     outlooks worklist --after YYYY-MM-DD --before YYYY-MM-DD --out <dir>
+    outlooks uri <worklist> <NAME>
     outlooks totals [<prefix> ...] | --check AFTER BEFORE
     outlooks audit <prefix> [--sweep <file>]
     outlooks windows init|fill|split|batches|remaining
@@ -37,6 +38,7 @@ from pkgskills import register
 from outlooks.host import HOST
 
 if TYPE_CHECKING:
+    from outlooks.capture import Capture
     from outlooks.window_plan import Plan
 
 app = typer.Typer(
@@ -119,6 +121,7 @@ def import_(
         typer.echo(f"  UNMATCHED attachment read (its message not read): {path}")
     for path, why in done.attachments_refused:
         typer.echo(f"  REFUSED attachment read ({why}): {path}")
+    _report_round(captures)
     found = cv.windows(captures, box)
     try:
         rows = cv.record(found)
@@ -152,6 +155,27 @@ def import_(
         typer.echo(
             f"  ({known} complete windows already recorded; {inside} incomplete "
             f"windows inside recorded coverage not listed)"
+        )
+
+
+def _report_round(captures: list[Capture]) -> None:
+    """The last round of readers: its rate, and any reader's parallel reads."""
+    from outlooks import worklist as wl
+
+    found = wl.last_round(captures)
+    if found is None:
+        return
+    seconds = int((found.end - found.start).total_seconds())
+    typer.echo(
+        f"last read round: {found.readers} reader{'s' * (found.readers != 1)}, "
+        f"{found.reads} read{'s' * (found.reads != 1)} in "
+        f"{seconds // 60}m{seconds % 60:02d}s ({found.per_minute:.0f} a minute)"
+    )
+    if found.parallel:
+        typer.echo(
+            f"  PARALLEL reads by {len(found.parallel)} of {found.readers} readers "
+            f"({sum(found.parallel.values())} made while another was in flight): "
+            "the brief allows one call at a time"
         )
 
 
@@ -426,6 +450,20 @@ def worklist(
 
 
 @app.command()
+def uri(
+    worklist: Annotated[Path, typer.Argument(help="A batch file of NAME <uri> lines.")],
+    name: Annotated[str, typer.Argument(help="The NAME of one line.")],
+) -> None:
+    """Print one worklist line's uri, for a reader to pass on verbatim."""
+    from outlooks import worklist as wl
+
+    try:
+        typer.echo(wl.line_uri(worklist, name))
+    except wl.WorklistError as e:
+        raise _fail(e) from None
+
+
+@app.command()
 def totals(
     prefixes: Annotated[
         list[str] | None,
@@ -489,6 +527,7 @@ def audit(
     result = wl.audit(prefix)
     typer.echo(str(dict(result.counts)))
     typer.echo(f"missing by type: {dict(result.missing)}")
+    typer.echo(f"binary (no text to read) by type: {dict(result.binary)}")
     for line in result.listed:
         typer.echo(f"  MISSING {line}")
     typer.echo(f"never attempted: {len(result.untried)}")

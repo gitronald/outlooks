@@ -195,7 +195,7 @@ def test_read_worklist_replaces_earlier_batch_files(tmp_path):
     assert not (out / "batch-02.txt").exists()
 
 
-# --- attempted_ids and audit -----------------------------------------------------
+# --- attachment_reads and audit --------------------------------------------------
 
 
 def test_audit_counts_texts_missing_untried_and_bad_files():
@@ -274,14 +274,14 @@ def test_audit_counts_texts_missing_untried_and_bad_files():
     assert result.bad == ["badfile.json"]
 
 
-def test_attempted_ids_reads_the_attachment_id_from_a_read_capture():
+def test_attachment_reads_takes_the_attachment_id_from_a_read_capture():
     write_capture(
         "20260901T090000",
         READ,
         {"uri": f"mail:///messages/M1%3D/attachments/A9?owner={BOX}"},
         "some text",
     )
-    assert wl.attempted_ids() == {"A9"}
+    assert wl.attachment_reads() == ({"A9"}, set())
 
 
 @pytest.mark.parametrize("ctype", wl.CALENDAR)
@@ -300,6 +300,83 @@ def test_audit_counts_a_calendar_invite_but_never_lists_it(ctype):
     assert result.missing == {ctype: 1}
     assert result.listed == []
     assert result.untried == []
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["PNG image", "JPEG image", "img-3f2a9c1e-77b0-4c1d-9e1a-0d5b6c7e8f90", "x.ai"],
+)
+def test_audit_skips_an_image_sent_as_octet_stream(name):
+    # The connector sends some images as octet-stream under a placeholder
+    # name; only a read would show they are images, so the sweep never lists
+    # them, and a text file in their slot is reported like any image's.
+    image = {
+        "name": name,
+        "contentType": "application/octet-stream",
+        "uri": f"mail:///messages/M1%3D/attachments/A1?owner={BOX}",
+    }
+    m1 = {**message(1, [image]), "receivedDateTime": "2026-03-15T00:00:00.000Z"}
+    store.save_message(m1)
+    result = wl.audit("2026-03")
+    assert result.counts["text-bearing"] == 0
+    assert (result.missing, result.listed, result.untried) == ({}, [], [])
+
+    key = store.id_hash(m1["internetMessageId"])
+    (store.archive_root() / "messages" / f"{key}.1.txt").write_text("x", "utf-8")
+    assert wl.audit("2026-03").image_slots == [f"{key}.1"]
+
+
+@pytest.mark.parametrize(
+    "ctype", ["application/pdf", "application/octet-stream", "text/calendar"]
+)
+def test_audit_counts_a_binary_note_apart_from_missing(ctype):
+    # A read that got the connector's binary note gets it again on a re-read,
+    # so the attachment is counted as binary, never listed as missing.
+    owner = f"?owner={BOX}"
+    report = {
+        "name": "report.pdf",
+        "contentType": ctype,
+        "uri": f"mail:///messages/M1%3D/attachments/A1%3D{owner}",
+    }
+    store.save_message(
+        {**message(1, [report]), "receivedDateTime": "2026-03-15T00:00:00.000Z"}
+    )
+    note = {
+        "note": "Binary attachment; content is not available as text.",
+        "attachment": {"name": "report.pdf", "contentType": ctype},
+    }
+    write_capture(
+        "20260901T090000",
+        READ,
+        {"uri": f"mail:///messages/M1%3D/attachments/A1%3D{owner}"},
+        note,
+    )
+    result = wl.audit("2026-03")
+    assert result.binary == {ctype: 1}
+    assert (result.missing, result.listed, result.untried) == ({}, [], [])
+
+
+def test_attachment_reads_takes_only_the_connector_s_note_as_binary():
+    # Text that mentions the note, or the parent message read back in place of
+    # the attachment, is not the note: those reads are tried, not binary.
+    owner = f"?owner={BOX}"
+    reads = {
+        "A1": "the letter",
+        "A2": {
+            "note": "Binary attachment; content is not available as text.",
+            "attachment": {"name": "report.pdf", "contentType": "application/pdf"},
+        },
+        "A3": "Note: a binary attachment was removed from this message.",
+        "A4": {**message(1), "bodyPreview": "Binary attachment: see below"},
+    }
+    for n, (att, response) in enumerate(reads.items()):
+        write_capture(
+            f"20260901T09000{n}",
+            READ,
+            {"uri": f"mail:///messages/M1%3D/attachments/{att}{owner}"},
+            response,
+        )
+    assert wl.attachment_reads() == (set(reads), {"A2"})
 
 
 # --- the quiet period ------------------------------------------------------------
@@ -403,3 +480,95 @@ def test_read_worklist_refuses_a_malformed_bound(tmp_path, day):
     with pytest.raises(wl.WorklistError, match="not a YYYY-MM-DD date"):
         wl.read_worklist(day, "2026-03-12", tmp_path / "out")
     assert not (tmp_path / "out").exists()
+
+
+# --- the last read round ---------------------------------------------------------
+
+T0 = datetime(2026, 9, 1, 16, 0, tzinfo=UTC)
+
+
+def reader_read(n, agent, ends, ms=2000.0, call=None):
+    """A read by subagent ``agent`` that finished ``ends`` seconds after T0."""
+    folder = config.captured_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"r{n:03d}-1.json"
+    payload = {
+        "hook_event_name": "PostToolUse",
+        "tool_name": READ,
+        "tool_input": {"uri": f"mail:///messages/ID{n}?owner={BOX}"},
+        "tool_response": blocks(message(n)),
+        "tool_use_id": call or f"call-{n}",
+        "agent_id": agent,
+        "agent_type": "general-purpose",
+    }
+    if ms is not None:
+        payload["duration_ms"] = ms
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    when = (T0 + timedelta(seconds=ends)).timestamp()
+    os.utime(path, (when, when))
+
+
+def captures():
+    from outlooks.capture import load_captures
+
+    return load_captures([config.captured_dir()])[0]
+
+
+def test_last_round_counts_the_newest_readers_and_their_rate():
+    # An earlier round, over before the last one starts.
+    reader_read(1, "old", 0)
+    reader_read(2, "old", 10)
+    # The last round: two readers whose spans overlap, one call at a time.
+    reader_read(3, "a", 100)
+    reader_read(4, "a", 110)
+    reader_read(5, "b", 105)
+    reader_read(6, "b", 158)
+    found = wl.last_round(captures())
+    assert found is not None
+    assert (found.readers, found.reads, found.parallel) == (2, 4, {})
+    assert found.end - found.start == timedelta(seconds=60)
+    assert found.per_minute == 4
+
+
+def test_last_round_names_a_reader_that_read_in_parallel():
+    reader_read(1, "a", 100, ms=3000)
+    reader_read(2, "a", 101, ms=3000)  # started at 98, before 1 ended
+    reader_read(3, "a", 110, ms=3000)
+    reader_read(4, "b", 104, ms=3000)
+    found = wl.last_round(captures())
+    assert found is not None
+    assert found.parallel == {"a": 1}
+
+
+def test_last_round_without_durations_and_with_a_doubled_capture():
+    # Untimed reads under a second apart were made together; a call captured
+    # by two hooks is one read, not two in parallel.
+    reader_read(1, "a", 100, ms=None)
+    reader_read(2, "a", 100.5, ms=None)
+    reader_read(3, "a", 110, ms=None)
+    reader_read(4, "a", 110, ms=None, call="call-3")
+    found = wl.last_round(captures())
+    assert found is not None
+    assert (found.reads, found.parallel) == (3, {"a": 1})
+
+
+def test_last_round_leaves_out_the_main_session_s_reads():
+    write_capture("20260901T090000", READ, {"uri": "mail:///messages/ID1"}, "x")
+    assert wl.last_round(captures()) is None
+
+
+def test_import_reports_the_last_round_and_its_parallel_reads():
+    from typer.testing import CliRunner
+
+    from outlooks.cli import app
+
+    reader_read(1, "a", 100, ms=3000)
+    reader_read(2, "a", 101, ms=3000)
+    reader_read(3, "b", 102, ms=3000)
+    reader_read(4, "b", 160, ms=3000)
+    result = CliRunner().invoke(app, ["import"])
+    assert result.exit_code == 0, result.output
+    assert "last read round: 2 readers, 4 reads in 1m03s (4 a minute)" in (
+        result.output
+    )
+    assert "PARALLEL reads by 1 of 2 readers (1 made while" in result.output

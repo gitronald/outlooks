@@ -56,6 +56,10 @@ class Capture:
     # The call the hook ran for; two captures naming one are one call captured
     # by two hooks.
     tool_use_id: str | None = None
+    # The subagent that made the call (absent for the main session's own), and
+    # how long the call ran, as the hook was told them.
+    agent_id: str | None = None
+    duration_ms: float | None = None
 
     @property
     def mailbox(self) -> str | None:
@@ -126,6 +130,32 @@ class Capture:
 
 def _is_message(block: dict[str, Any]) -> bool:
     return "internetMessageId" in block
+
+
+# The connector sends some images as ``application/octet-stream`` under a
+# placeholder name (``PNG image``, ``img-<uuid>``), so the content type alone
+# misses them. Design files carry no text worth reading either. Only a whole
+# uuid follows ``img-``, so a document named ``img-1234abcd-report.pdf`` is not
+# taken for one.
+IMAGE_NAME = re.compile(
+    r"^(?:(?:png|jpe?g|gif|bmp|tiff?|webp|heic) image"
+    r"|img-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$",
+    re.I,
+)
+IMAGE_EXT = tuple(
+    f".{ext}"
+    for ext in "png jpg jpeg gif bmp tif tiff webp heic svg ai psd eps".split()
+)
+
+
+def is_image(att: dict[str, Any]) -> bool:
+    """Whether an attachment entry is an image, by its type, name, or extension."""
+    name = str(att.get("name") or "").strip()
+    return (
+        str(att.get("contentType") or "").lower().startswith("image/")
+        or bool(IMAGE_NAME.match(name))
+        or name.lower().endswith(IMAGE_EXT)
+    )
 
 
 def uri_path(uri: str) -> str:
@@ -233,7 +263,7 @@ def read_capture(path: Path) -> Capture | None:
     else:
         return None
     blocks = _blocks(data.get("tool_response"), _saved_copy(path))
-    call = data.get("tool_use_id")
+    call, agent, ms = (data.get(k) for k in ("tool_use_id", "agent_id", "duration_ms"))
     return Capture(
         path,
         tool,
@@ -242,6 +272,8 @@ def read_capture(path: Path) -> Capture | None:
         _captured_at(path),
         lost=blocks is None,
         tool_use_id=call if isinstance(call, str) and call else None,
+        agent_id=agent if isinstance(agent, str) and agent else None,
+        duration_ms=float(ms) if isinstance(ms, int | float) else None,
     )
 
 
@@ -382,8 +414,7 @@ def import_captures(
             done.attachments_refused.append((c.path, "returned the parent message"))
             continue
         message, n = slot
-        kind = (message["attachments"][n - 1].get("contentType") or "").lower()
-        if kind.startswith("image/"):
+        if is_image(message["attachments"][n - 1]):
             # An image has no text; what came back is the connector's note
             # about it, which must not sit where attachment text goes.
             done.attachments_refused.append((c.path, "an image attachment"))
