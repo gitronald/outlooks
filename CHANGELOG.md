@@ -23,6 +23,22 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+### Added
+
+- `outlooks uri <worklist> <NAME>` prints one worklist line's uri, and
+  refuses a NAME the file does not hold. The bulk reader brief has each
+  reader run it right before every read instead of copying the uri out of
+  the whole file, so a retyped uri can no longer read a neighbouring message
+  and a call past the last line reads nothing.
+
+### Changed
+
+- The bulk reader brief opens with its two rules (one call at a time, never
+  retype a uri), lists the NAMEs with `cut` rather than `cat`ting the
+  worklist, and puts any notes below a `---` line after the status lines.
+  A repo that launches readers with "cat it first" in their prompt should
+  drop that clause (the window skill's `read-launch` step no longer has it).
+
 ### Fixed
 
 - `outlooks audit` and `outlooks import` treat an attachment as an image when

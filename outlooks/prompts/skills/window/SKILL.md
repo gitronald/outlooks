@@ -259,9 +259,12 @@ directly with the pager brief, because `batches` skips covered windows.
 3. **Step `read-launch`.** **Launch at most eight `sonnet` readers at once, one per batch, in one
    message**, each with the one-sentence prompt: run
    `{cli} doc window/bulk-reader-brief` and follow it; your worklist is
-   `<path>`; cat it first; work from the repo root. The bulk brief writes no
-   timeline files and returns one status word per message; the lookup's
-   reader brief is for lookups. A range of more than eight batches runs in
+   `<path>`; work from the repo root. The bulk brief writes no timeline
+   files and returns one status line per NAME, then any notes below a `---`
+   line: read the status lines above it, and the notes for what went wrong.
+   A reader gets each uri from `{cli} uri <worklist> <NAME>` rather than
+   copying it, so don't tell it to `cat` the worklist. The lookup's reader
+   brief is for lookups. A range of more than eight batches runs in
    rounds: launch the next round only when the last reader of the current
    one has returned, so the throttle's window has drained. A round of eight
    takes about two minutes, while twenty at once are throttled within two
