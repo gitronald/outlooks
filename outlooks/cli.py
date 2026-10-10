@@ -9,6 +9,7 @@
     outlooks check <name>
     outlooks lookup-reset <name>
     outlooks worklist --after YYYY-MM-DD --before YYYY-MM-DD --out <dir>
+    outlooks uri <worklist> <NAME>
     outlooks totals [<prefix> ...] | --check AFTER BEFORE
     outlooks audit <prefix> [--sweep <file>]
     outlooks windows init|fill|split|batches|remaining
@@ -423,6 +424,20 @@ def worklist(
         )
     for hit in result.todo:
         typer.echo(f"{hit['receivedDateTime']} {(hit.get('subject') or '')[:70]}")
+
+
+@app.command()
+def uri(
+    worklist: Annotated[Path, typer.Argument(help="A batch file of NAME <uri> lines.")],
+    name: Annotated[str, typer.Argument(help="The NAME of one line.")],
+) -> None:
+    """Print one worklist line's uri, for a reader to pass on verbatim."""
+    from outlooks import worklist as wl
+
+    try:
+        typer.echo(wl.line_uri(worklist, name))
+    except wl.WorklistError as e:
+        raise _fail(e) from None
 
 
 @app.command()

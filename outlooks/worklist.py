@@ -200,6 +200,29 @@ def read_worklist(
     return result
 
 
+def line_uri(worklist: Path, name: str) -> str:
+    """The uri on the worklist line named ``name``, exactly as written.
+
+    A reader passes this to ``read_resource`` instead of copying the uri out of
+    a listing of the whole file: the ids are long and differ near the end, so a
+    retyped one reads a neighbouring message. A name not in the file is refused
+    with the names it does hold, so a call past the last line reads nothing.
+    """
+    try:
+        text = worklist.read_text(encoding="utf-8")
+    except OSError as e:
+        raise WorklistError(f"{worklist}: {e.strerror or e}") from None
+    names: list[str] = []
+    for line in text.splitlines():
+        key, _, uri = line.strip().partition(" ")
+        if key == name and uri.strip():
+            return uri.strip()
+        if key:
+            names.append(key)
+    held = f"{names[0]} to {names[-1]}" if names else "none"
+    raise WorklistError(f"no line {name} in {worklist} (its names: {held})")
+
+
 def _attachment_reads(folder: Path | None) -> Iterator[tuple[str, Any]]:
     """(attachment id, tool_response) for each captured attachment read."""
     for path in (folder or captured_dir()).glob("*.json"):
