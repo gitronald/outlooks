@@ -56,6 +56,10 @@ class Capture:
     # The call the hook ran for; two captures naming one are one call captured
     # by two hooks.
     tool_use_id: str | None = None
+    # The subagent that made the call (absent for the main session's own), and
+    # how long the call ran, as the hook was told them.
+    agent_id: str | None = None
+    duration_ms: float | None = None
 
     @property
     def mailbox(self) -> str | None:
@@ -255,7 +259,7 @@ def read_capture(path: Path) -> Capture | None:
     else:
         return None
     blocks = _blocks(data.get("tool_response"), _saved_copy(path))
-    call = data.get("tool_use_id")
+    call, agent, ms = (data.get(k) for k in ("tool_use_id", "agent_id", "duration_ms"))
     return Capture(
         path,
         tool,
@@ -264,6 +268,8 @@ def read_capture(path: Path) -> Capture | None:
         _captured_at(path),
         lost=blocks is None,
         tool_use_id=call if isinstance(call, str) and call else None,
+        agent_id=agent if isinstance(agent, str) and agent else None,
+        duration_ms=float(ms) if isinstance(ms, int | float) else None,
     )
 
 

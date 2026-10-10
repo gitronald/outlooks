@@ -38,6 +38,7 @@ from pkgskills import register
 from outlooks.host import HOST
 
 if TYPE_CHECKING:
+    from outlooks.capture import Capture
     from outlooks.window_plan import Plan
 
 app = typer.Typer(
@@ -120,6 +121,7 @@ def import_(
         typer.echo(f"  UNMATCHED attachment read (its message not read): {path}")
     for path, why in done.attachments_refused:
         typer.echo(f"  REFUSED attachment read ({why}): {path}")
+    _report_round(captures)
     found = cv.windows(captures, box)
     try:
         rows = cv.record(found)
@@ -153,6 +155,27 @@ def import_(
         typer.echo(
             f"  ({known} complete windows already recorded; {inside} incomplete "
             f"windows inside recorded coverage not listed)"
+        )
+
+
+def _report_round(captures: list[Capture]) -> None:
+    """The last round of readers: its rate, and any reader's parallel reads."""
+    from outlooks import worklist as wl
+
+    found = wl.last_round(captures)
+    if found is None:
+        return
+    seconds = int((found.end - found.start).total_seconds())
+    typer.echo(
+        f"last read round: {found.readers} reader{'s' * (found.readers != 1)}, "
+        f"{found.reads} read{'s' * (found.reads != 1)} in "
+        f"{seconds // 60}m{seconds % 60:02d}s ({found.per_minute:.0f} a minute)"
+    )
+    if found.parallel:
+        typer.echo(
+            f"  PARALLEL reads by {len(found.parallel)} of {found.readers} readers "
+            f"({sum(found.parallel.values())} made while another was in flight): "
+            "the brief allows one call at a time"
         )
 
 

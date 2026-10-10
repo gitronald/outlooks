@@ -200,6 +200,83 @@ def read_worklist(
     return result
 
 
+@dataclass
+class Round:
+    """The last round of reader subagents, from their captured reads."""
+
+    reads: int
+    start: datetime
+    end: datetime
+    # agent id -> the reads it made while another of its own was in flight
+    parallel: dict[str, int]
+    readers: int
+
+    @property
+    def per_minute(self) -> float:
+        minutes = (self.end - self.start).total_seconds() / 60
+        return self.reads / minutes if minutes > 0 else float(self.reads)
+
+
+# A call's start, when the hook was not told how long it ran: a read finishing
+# this soon after another of the same reader's was made beside it, since a
+# reader that waits for each result takes seconds to make its next call.
+UNTIMED = timedelta(seconds=1)
+
+
+def last_round(captures: list[Capture]) -> Round | None:
+    """The newest round of reads by subagents, and which of them ran in parallel.
+
+    Each read runs from its capture's write time back by its ``duration_ms``. A
+    round is the readers whose spans overlap, one after another, ending with the
+    newest; a read that starts before another of the same reader's has ended
+    was made in parallel with it. Reads by the main session, which carry no
+    ``agent_id``, are left out, and a call captured twice counts once. None
+    when no read carries an ``agent_id``.
+    """
+    calls: dict[str, list[tuple[datetime, datetime]]] = {}
+    seen: set[str] = set()
+    for c in captures:
+        if c.tool != "read" or c.agent_id is None:
+            continue
+        if c.tool_use_id is not None:
+            if c.tool_use_id in seen:
+                continue
+            seen.add(c.tool_use_id)
+        end = datetime.fromtimestamp(c.path.stat().st_mtime, UTC)
+        ran = (
+            UNTIMED if c.duration_ms is None else timedelta(milliseconds=c.duration_ms)
+        )
+        calls.setdefault(c.agent_id, []).append((end - ran, end))
+    if not calls:
+        return None
+    spans = sorted(
+        (min(s for s, _ in own), max(e for _, e in own), agent)
+        for agent, own in calls.items()
+    )
+    group: list[str] = []
+    until = spans[0][1]
+    for start, end, agent in spans:
+        if start > until:
+            group = []
+        group.append(agent)
+        until = max(until, end)
+    reads = [span for agent in group for span in calls[agent]]
+    parallel: dict[str, int] = {}
+    for agent in group:
+        busy = None
+        for start, end in sorted(calls[agent], key=lambda span: span[1]):
+            if busy is not None and start < busy:
+                parallel[agent] = parallel.get(agent, 0) + 1
+            busy = end if busy is None else max(busy, end)
+    return Round(
+        reads=len(reads),
+        start=min(s for s, _ in reads),
+        end=max(e for _, e in reads),
+        parallel=parallel,
+        readers=len(group),
+    )
+
+
 def line_uri(worklist: Path, name: str) -> str:
     """The uri on the worklist line named ``name``, exactly as written.
 
