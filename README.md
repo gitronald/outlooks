@@ -13,7 +13,7 @@ the mailbox so that the archive fills itself.
 
 ## Install
 
-Python 3.11 or later. `render` needs [pandoc](https://pandoc.org) on the PATH.
+Python 3.12 or later. `render` needs [pandoc](https://pandoc.org) on the PATH.
 
 There are two recipes, one for each way a repo uses the package. Both pin a
 release.

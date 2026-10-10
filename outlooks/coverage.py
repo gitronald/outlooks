@@ -28,7 +28,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any
 
 from outlooks import config, store
 from outlooks.capture import Capture
@@ -208,7 +208,7 @@ def page_end(capture: Capture) -> int | None:
     return None
 
 
-Bounds: TypeAlias = tuple[datetime, datetime | None]  # before None: open-ended
+type Bounds = tuple[datetime, datetime | None]  # before None: open-ended
 
 
 def window_bounds(capture: Capture) -> Bounds:
