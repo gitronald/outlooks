@@ -1,10 +1,10 @@
 ---
 id: 1
 slug: bulk-reader-slips
-status: implemented
+status: done
 branch: feature/bulk-reader-slips
 created: 2026-10-10T00:34:31-07:00
-concluded:
+concluded: 2026-10-10T11:28:53-07:00
 pr: https://github.com/gitronald/outlooks/pull/6
 ---
 
@@ -175,14 +175,50 @@ might fix", or "never tried".
   - Not covered: an octet-stream image (the run's mail had none), and a
     throttled round.
 - **2026-10-10T11:21:37-07:00** — Implemented: 9 commits ahead of `dev`.
+- **2026-10-10T11:29:08-07:00** — Closed after review.
+  - Review follow-up (`/code-review` at medium, posted to PR #6): five
+    findings, four fixed, one no-op.
+    - The `img-` branch of `IMAGE_NAME` took any suffix, so a document named
+      `img-deadbeef-report.docx` was treated as an image and its read
+      refused. Now only a whole uuid follows `img-` (2052740), with
+      `test_is_image_takes_only_a_whole_placeholder_name`.
+    - `binary_ids` searched the whole dumped response for the phrase, so
+      text mentioning it, or the parent message read back in place of the
+      attachment, counted as binary. The note is now matched as the
+      connector's block (2a5a1b7), with
+      `test_attachment_reads_takes_only_the_connector_s_note_as_binary`.
+    - `audit` parsed every capture twice. `attempted_ids` and `binary_ids`
+      became one `attachment_reads()` pass through `read_capture` (2a5a1b7).
+    - `connector.md` said audit counts a calendar invite as missing; a read
+      invite now counts under `binary`, and the text says so (108526e).
+    - No-op: `last_round` times reads by file mtime, which a restore without
+      mtimes would collapse. mtime is the only sub-second source (the hook's
+      filename stamp has whole seconds), nothing in the import flow rewrites
+      it, and the quiet-period check on `dev` already relies on it.
+  - Checks: ruff check, ruff format --check, pyrefly, and pytest (443
+    passed).
 
 ## Handoff
 
-- Steps 1 to 4 are done, committed, and pushed on `feature/bulk-reader-slips`
-  (PR #6). Nothing is uncommitted.
+- Closed. Steps 1 to 4 and the review fixes are merged through PR #6.
 - Open questions:
   1. Should the plan be marked implemented without step 4? Settled
      2026-10-10: the live round was run instead (see Log).
 - Not verified live: an octet-stream image attachment, and a throttled
   round. Unit tests cover the first.
-- Remaining: review of PR #6, then `/planners close`.
+
+## Retrospective
+
+- The plan's "make it observable" bet for parallel reads paid off with no
+  hook change: Claude Code already passes `agent_id` and `duration_ms`, and
+  the verbatim capture kept them. Reading the hook docs before designing a
+  reader tag saved a step.
+- `worklist next` became a top-level `uri` command, because a Typer command
+  with required options cannot also be a group. Checking the CLI's shape
+  before naming a command in a plan would have caught it.
+- The live round was worth running before close: it confirmed the capture
+  fields and the new return format against real readers, which the unit
+  tests could only assume.
+- The review's two real bugs were both over-broad matches (a regex suffix,
+  a substring over a whole response). Classifiers that decide what gets
+  skipped deserve negative test cases from the start, not only positive ones.
