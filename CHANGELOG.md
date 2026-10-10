@@ -23,6 +23,17 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+### Fixed
+
+- `outlooks audit` and `outlooks import` treat an attachment as an image when
+  its name is a connector placeholder (`PNG image`, `img-<uuid>`) or ends in
+  an image or design file's extension, whatever its `contentType`. The audit
+  no longer lists these images as missing or puts them in the `--sweep`
+  worklist, and `import` refuses a read of one.
+- `outlooks audit` counts an attachment that a read got the connector's
+  "Binary attachment" note for on a `binary (no text to read) by type` line,
+  instead of listing it as `MISSING` on every run.
+
 ## [0.4.0] - 2026-09-29
 
 ### Added

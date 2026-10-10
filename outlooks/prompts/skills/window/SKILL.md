@@ -293,6 +293,9 @@ directly with the pager brief, because `batches` skips covered windows.
    ever tried (a reader skipped it, or stopped partway through a message)
    and writes them as a worklist for one sweep reader, launched on the bulk
    reader brief and told the lines are attachment uris to read directly.
+   Images (an octet-stream `PNG image` or `img-<uuid>` included) are never
+   on it, and an attachment a read got the connector's "Binary attachment"
+   note for is counted under `binary`, not listed as missing.
    `import` refuses a read of an image attachment (`REFUSED attachment read
    (an image attachment)`); that line means a reader broke the brief, and
    nothing was filed for it. Commit the archive's `messages/`.

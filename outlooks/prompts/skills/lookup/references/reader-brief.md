@@ -18,7 +18,9 @@ Your worklist file lists lines `NAME-NN <uri>`. For each line:
    time; check that entry's own `contentType` and `isInline`, and read that
    same entry's own `uri` only if it carries text (a document, PDF, or text
    file); the hook captures that too. Never read an image attachment (inline
-   signature logo, banner, `image/*` content type, `isInline: true`), and
+   signature logo, banner, `image/*` content type, `isInline: true`, or
+   a name like `PNG image`, `img-<uuid>`, or `*.png`/`.jpg`/`.gif`/`.svg`/
+   `.ai`/`.psd` whatever its content type), and
    never write a caption, description, or placeholder for one. Don't pair
    names with uris by position or by eye: a uri taken from the neighbouring
    entry is how an image gets read. A hit's `hasAttachments` is true for an
