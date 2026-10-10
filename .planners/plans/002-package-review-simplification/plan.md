@@ -85,23 +85,37 @@ main session verifying and committing.
 - **2026-10-10T12:04:48-07:00** — Implemented: 7 commits ahead of `dev`.
 - **2026-10-10T12:14:33-07:00** — Reactivated: back to active after review.
 
+- **2026-10-10T12:31:48-07:00** — The owner decided the six interface
+  findings (questions 1-6 in the earlier Handoff), and they are done.
+  - 1: `store.archive_root()` removed; `config.archive_dir()` is the one
+    name. Internal `archive=` parameters renamed `root=` to match `store`.
+  - 2: `config.mailbox()` renamed `config.archive_mailbox()`; what a capture
+    or uri names is the "owner" (`Capture.owner`, `store.hit_owner`).
+  - 3: sweep step `worklist` renamed `approval`, lookup step `gaps` renamed
+    `widen`; a searcher's one-line file is a "search task file".
+  - 4: the timeline key `system` renamed `automated` (the owner picked the
+    recommended option over splitting the key or documenting it).
+  - 5: "window" is a pull's bounds, "span" a merged covered interval or a
+    gap. Codex reported that a hit at a span's end instant was counted
+    "lookup only" in the next gap; the main session fixed it by treating
+    spans as closed, like the pulls they come from, with a test that fails
+    on the old code.
+  - 6: `doctor`'s archive check parses message files and checks each is
+    stored under its id's hash.
+  - Codex pass 3 did 1, 2, 3, and 5 and was partway through 6 when it hit its
+    usage limit, leaving no report. The main session reviewed the partial
+    diff, finished 6, did 4, fixed wording and wrapping in the prompts,
+    restored the `Window.end` rationale Codex had rewritten, and rewrote the
+    changelog entries. 481 tests; ruff and pyrefly strict clean.
+
 ## Handoff
 
-The pass is committed on `feature/package-review-simplification`. What is
-left is the findings that touch the declared interface, which this plan was
-not allowed to change. Each needs a decision before any change.
+All work for this plan is committed on
+`feature/package-review-simplification` (PR #9). The six interface findings
+from the first pass are settled (see the Log entry of 12:31).
 
-1. `store.archive_root()` and `config.archive_dir()` are two public names for
-   one location.
-2. "mailbox" means three things: the configured connector owner, the address
-   the archive files under, and the owner a capture names.
-3. "worklist" means both the sweep's approval list and a reader's uri list;
-   "gap" means both an uncovered interval (coverage) and missing
-   correspondence (the lookup skill's step).
-4. A timeline file's `system` key covers notice senders too, while
-   `config.is_system_sender` excludes them.
-5. Window bounds from the connector are inclusive on both ends; coverage
-   intervals are half-open; both are called windows.
-6. `outlooks doctor` does not parse message files.
-
-CI passed on Python 3.12, 3.13, and 3.14 for PR #9.
+Open question 7 (raised 2026-10-10): the `classify` role `system` covers
+notice senders too (`Facts("system", extra={"notice": True})`), like the
+timeline key now named `automated`. The role names are pinned
+(`tests/test_contract.py` `ROLES`), so this is left as is unless the owner
+wants the role renamed as well.
