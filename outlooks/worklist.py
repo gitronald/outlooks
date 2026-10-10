@@ -13,19 +13,16 @@ README's "Python API" lists what is). The CLI is this module's interface.
 from __future__ import annotations
 
 import json
-import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
 
 from outlooks import config, store
+from outlooks.attachments import attachment_id, is_image
 from outlooks.capture import (
     Capture,
-    captured_dir,
-    is_image,
     load_captures,
     read_capture,
 )
@@ -34,15 +31,14 @@ from outlooks.coverage import (
     is_window,
     mass_copies,
     mass_sends_csv,
-    parse_ts,
     read_rows,
     windows,
 )
+from outlooks.timestamps import parse_ts
 
 # Calendar invites always come back as a binary-attachment note.
 CALENDAR = ("text/calendar", "application/ics")
 NO_TEXT = ("message/rfc822", "application/zip", "multipart/signed", *CALENDAR)
-ATTACHMENT_ID = re.compile(r"/attachments/([^?]+)")
 # What the connector returns, lowercased, for an attachment it has no text for.
 BINARY_NOTE = "binary attachment"
 # How long the connector must have been quiet before worklists are rebuilt.
@@ -114,9 +110,11 @@ def read_worklist(
     re-pull of a covered window is short, or when the newest capture was written
     under ``QUIET`` before ``now``.
     """
+    if per < 1:
+        raise WorklistError(f"per must be at least 1, not {per}")
     lo, hi = bound(after), bound(before)
     box = mailbox or config.mailbox()
-    captures, _ = load_captures(sorted(captured_dir().glob("*.json")))
+    captures, _ = load_captures(sorted(config.captured_dir().glob("*.json")))
     listed: dict[str, dict[str, Any]] = {}
     read: set[str] = set()
     for c in captures:
@@ -170,7 +168,6 @@ def read_worklist(
                 "import and rerun; no worklists written"
             )
 
-    messages = store.archive_root() / "messages"
     result = Worklist(listed=len(listed))
     skipped = mass_copies(listed, read_rows(mass_sends_csv()))
     result.mass_copies = len(skipped)
@@ -180,7 +177,7 @@ def read_worklist(
             for key, hit in listed.items()
             if key not in read
             and key not in skipped
-            and not (messages / f"{store.id_hash(key)}.json").exists()
+            and not store.message_path(key).exists()
         ),
         key=_received,
     )
@@ -323,13 +320,12 @@ def attachment_reads(folder: Path | None = None) -> tuple[set[str], set[str]]:
     """
     tried: set[str] = set()
     binary: set[str] = set()
-    for path in (folder or captured_dir()).glob("*.json"):
+    for path in (folder or config.captured_dir()).glob("*.json"):
         c = read_capture(path)
         uri = c.args.get("uri") if c and isinstance(c.args, dict) else None
-        match = ATTACHMENT_ID.search(uri) if isinstance(uri, str) else None
-        if c is None or match is None:
+        att_id = attachment_id(uri) if isinstance(uri, str) else None
+        if c is None or att_id is None:
             continue
-        att_id = unquote(match.group(1))
         tried.add(att_id)
         if any(_is_binary_note(b) for b in c.blocks):
             binary.add(att_id)
@@ -351,7 +347,7 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
     """Attachment texts for the archived messages received in ``prefix``.
 
     Counts the text-bearing attachments (not inline, not an image by
-    :func:`~outlooks.capture.is_image`) and how many have their
+    :func:`~outlooks.attachments.is_image`) and how many have their
     ``{id-hash}.{n}.txt``. One without text that a read got the connector's
     binary note for is counted under ``binary``, by type, and not as missing: a
     re-read returns the same note. Any other missing one that is not an
@@ -367,13 +363,20 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
     for path in sorted(messages.glob("*.json")):
         try:
             message = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(message, dict):
+                raise ValueError("not a message object")
+            attachments = message.get("attachments") or []
+            if not isinstance(attachments, list) or not all(
+                isinstance(att, dict) for att in attachments
+            ):
+                raise ValueError("attachments is not a list of objects")
         except ValueError:
             result.bad.append(path.name)
             continue
         if not str(message.get("receivedDateTime", "")).startswith(prefix):
             continue
         result.counts["messages"] += 1
-        for n, att in enumerate(message.get("attachments") or [], 1):
+        for n, att in enumerate(attachments, 1):
             ctype = str(att.get("contentType", ""))
             has_text = (messages / f"{path.stem}.{n}.txt").exists()
             if att.get("isInline") or is_image(att):
@@ -384,8 +387,7 @@ def audit(prefix: str, *, archive: Path | None = None) -> Audit:
             if has_text:
                 result.counts["with text"] += 1
                 continue
-            match = ATTACHMENT_ID.search(att.get("uri") or "")
-            att_id = unquote(match.group(1)) if match else None
+            att_id = attachment_id(att.get("uri") or "")
             if att_id in binary:
                 result.binary[ctype or "?"] += 1
                 continue

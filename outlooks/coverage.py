@@ -32,6 +32,7 @@ from typing import Any
 
 from outlooks import config, store
 from outlooks.capture import Capture
+from outlooks.timestamps import fmt_ts, parse_ts
 
 FIELDS = ["mailbox", "after", "before", "total", "messages", "pulled"]
 # The inputs a window pull sets; any other (query, sender, folderName, ...)
@@ -98,18 +99,6 @@ def mass_copies(
             ):
                 out.add(mid)
     return out
-
-
-def parse_ts(value: str) -> datetime:
-    """An ISO timestamp (``Z`` or an offset) as an aware UTC datetime."""
-    ts = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=UTC)
-    return ts.astimezone(UTC)
-
-
-def fmt_ts(ts: datetime) -> str:
-    return ts.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass
@@ -329,7 +318,7 @@ def _within(ts: datetime | None, spans: list[tuple[datetime, datetime]]) -> bool
     return ts is not None and any(a <= ts < b for a, b in spans)
 
 
-def _pt(ts: datetime) -> str:
+def _local_time(ts: datetime) -> str:
     return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
 
 
@@ -375,13 +364,13 @@ def report(
         lines.append("no windows recorded")
     for a, b in covered:
         n = sum(_within(_received(h), [(a, b)]) for h in hits.values())
-        lines.append(f"  covered  {_pt(a)} to {_pt(b)}  {n} archived")
+        lines.append(f"  covered  {_local_time(a)} to {_local_time(b)}  {n} archived")
     start = since or (covered[0][0] if covered else None)
     if start is not None:
         for a, b in gaps(covered, start, now):
             n = sum(_within(_received(h), [(a, b)]) for h in hits.values())
             note = f"  {n} archived (lookup only)" if n else ""
-            lines.append(f"  GAP      {_pt(a)} to {_pt(b)}{note}")
+            lines.append(f"  GAP      {_local_time(a)} to {_local_time(b)}{note}")
     unread: Counter[str] = Counter()
     by_design = 0
     for mid, h in hits.items():
@@ -398,16 +387,16 @@ def report(
     if by_design:
         lines.append(f"mass-send copies left unread by design  {by_design}")
     marks = [
-        r["received"]
+        parse_ts(r["received"])
         for r in ledger
         if r.get("received") and r.get("mailbox", mailbox).lower() == mailbox
     ]
-    mark = parse_ts(max(marks)) if marks else None
+    mark = max(marks, default=None)
     end = covered[-1][1] if covered else None
     if mark is not None:
-        lines.append(f"ledger high-water mark  {_pt(mark)}")
+        lines.append(f"ledger high-water mark  {_local_time(mark)}")
     if end is not None:
-        lines.append(f"coverage ends           {_pt(end)}")
+        lines.append(f"coverage ends           {_local_time(end)}")
         if mark is not None and mark < end:
             lines.append("  the ledger lags coverage: archived mail not yet classified")
     start = next_sweep(mark, end)

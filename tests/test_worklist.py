@@ -572,3 +572,35 @@ def test_import_reports_the_last_round_and_its_parallel_reads():
         result.output
     )
     assert "PARALLEL reads by 1 of 2 readers (1 made while" in result.output
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [None, [], 17, {"receivedDateTime": "2026-03-01", "attachments": [None]}],
+)
+def test_audit_reports_malformed_message_shapes(tmp_path, payload):
+    messages = tmp_path / "messages"
+    messages.mkdir()
+    (messages / "bad.json").write_text(json.dumps(payload), encoding="utf-8")
+    result = wl.audit("2026-03", archive=tmp_path)
+    assert result.bad == ["bad.json"]
+    assert result.counts == {}
+
+
+def test_attachment_reads_decodes_the_resource_path_before_matching():
+    write_capture(
+        "20260901T090000",
+        READ,
+        {"uri": "mail:///messages/M1%2Fattachments%2FA9%3D?owner=desk%40example.org"},
+        "attachment text",
+    )
+    assert wl.attachment_reads() == ({"A9="}, set())
+
+
+def test_read_worklist_refuses_a_nonpositive_per_before_clearing(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "batch-01.txt").write_text("a reader's batch\n", encoding="utf-8")
+    with pytest.raises(wl.WorklistError, match="per must be at least 1"):
+        wl.read_worklist("2026-03-10", "2026-03-12", out, per=0)
+    assert (out / "batch-01.txt").read_text(encoding="utf-8") == "a reader's batch\n"

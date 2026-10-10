@@ -8,11 +8,12 @@ own contract.
 """
 
 import json
+import time
 
 import pytest
 
+from outlooks import classify, store
 from outlooks import lookup as lk
-from outlooks import store
 
 RECEIVED = "2026-01-01T00:00:00.000Z"
 
@@ -271,21 +272,25 @@ def test_check_reports_ok_and_bad_rows(tmp_path):
     assert by_nn["02"].ok is False
 
 
-def test_is_system_and_direction():
+def test_is_automated_and_direction():
     from outlooks import config
 
-    assert lk.is_system("Notices@SYSTEM.Example.Org")
-    assert not lk.is_system("priya.nakamura@example.com")
-    assert lk.direction("desk@example.org", ["someone@example.com"]) == "out"
-    assert lk.direction("priya.nakamura@example.com", ["desk@example.org"]) == "in"
+    assert classify.is_automated("Notices@SYSTEM.Example.Org")
+    assert not classify.is_automated("priya.nakamura@example.com")
+    assert classify.direction("desk@example.org", ["someone@example.com"]) == "out"
+    assert (
+        classify.direction("priya.nakamura@example.com", ["desk@example.org"]) == "in"
+    )
     # System mail not addressed to us is outbound (a notice to a correspondent).
     own = config.settings().own_addresses
     assert "desk@example.org" in own
     assert (
-        lk.direction("notices@system.example.org", ["priya.nakamura@example.com"])
+        classify.direction("notices@system.example.org", ["priya.nakamura@example.com"])
         == "out"
     )
-    assert lk.direction("notices@system.example.org", ["desk@example.org"]) == "in"
+    assert (
+        classify.direction("notices@system.example.org", ["desk@example.org"]) == "in"
+    )
 
 
 def test_a_notice_senders_mail_is_inbound_whoever_it_is_addressed_to(monkeypatch):
@@ -295,16 +300,16 @@ def test_a_notice_senders_mail_is_inbound_whoever_it_is_addressed_to(monkeypatch
     bounce = "postmaster@mail.example.net"
     assert config.is_notice_sender(bounce)
     assert not config.is_system_sender(bounce)
-    assert lk.is_system(bounce)
-    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
-    assert lk.direction("Postmaster@Other.Example.com", []) == "in"
+    assert classify.is_automated(bounce)
+    assert classify.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert classify.direction("Postmaster@Other.Example.com", []) == "in"
     # An address both lists match is a notice sender.
     monkeypatch.setenv("OUTLOOKS_SYSTEM_SENDERS", "*@mail.example.net")
     assert config.is_notice_sender(bounce)
     assert not config.is_system_sender(bounce)
     assert config.is_system_sender("alerts@mail.example.net")
-    assert lk.direction(bounce, ["priya.nakamura@example.com"]) == "in"
-    assert lk.direction("alerts@mail.example.net", ["priya@example.com"]) == "out"
+    assert classify.direction(bounce, ["priya.nakamura@example.com"]) == "in"
+    assert classify.direction("alerts@mail.example.net", ["priya@example.com"]) == "out"
 
 
 # The second system list also matches the bounce address: it is still a notice.
@@ -490,3 +495,69 @@ def test_split_leaves_out_the_pages_of_a_longer_name(tmp_path):
     write_page(scratch, "priya-n", 1, [other])
     out = lk.split("priya", ["priya"], scratch=scratch, archive=tmp_path)
     assert out.pages == 1
+
+
+@pytest.mark.parametrize("remaining", [0, 1, 3])
+def test_split_clears_only_its_stale_batches(tmp_path, remaining):
+    scratch, archive, batches = (
+        tmp_path / name for name in ("scratch", "archive", "batches")
+    )
+    hits = [hit(f"<{n}@example.org>", "reader@example.org", []) for n in range(5)]
+    write_page(scratch, "topic", 1, hits)
+    lk.split("topic", ["reader"], scratch=scratch, archive=archive, batches=batches)
+    unrelated = batches / "topic-other-batch-01.txt"
+    unrelated.write_text("keep this batch\n", encoding="utf-8")
+    note = batches / "topic-batch-notes.txt"
+    note.write_text("keep these notes\n", encoding="utf-8")
+    write_page(scratch, "topic", 1, hits[:remaining])
+
+    result = lk.split(
+        "topic", ["reader"], scratch=scratch, archive=archive, batches=batches
+    )
+
+    assert sorted(batches.glob("topic-batch-[0-9]*.txt")) == result.batches
+    assert unrelated.read_text(encoding="utf-8") == "keep this batch\n"
+    assert note.read_text(encoding="utf-8") == "keep these notes\n"
+
+
+@pytest.mark.parametrize(
+    "earlier,later",
+    [
+        ("2026-03-20T01:00:00+02:00", "2026-03-19T23:30:00Z"),
+        ("2026-03-20T00:00:00Z", "2026-03-20T00:00:00.500Z"),
+    ],
+)
+def test_split_numbers_hits_in_chronological_order(tmp_path, earlier, later):
+    write_page(
+        tmp_path,
+        "topic",
+        1,
+        [
+            hit("<later@example.org>", "reader@example.org", [], received=later),
+            hit("<earlier@example.org>", "reader@example.org", [], received=earlier),
+        ],
+    )
+    result = lk.split("topic", ["reader"], scratch=tmp_path)
+    assert [h["internetMessageId"] for _, h in result.to_read] == [
+        "<earlier@example.org>",
+        "<later@example.org>",
+    ]
+
+
+def test_timeline_accepts_null_recipient_and_attachment_lists(tmp_path):
+    h = hit("<nullable@example.org>", "reader@example.org", [])
+    path = archive_message(tmp_path, h, toRecipients=None, attachments=None)
+    timeline = lk.timeline_from_archive(path)
+    assert timeline["to"] == []
+    assert timeline["attachments"] == []
+
+
+def test_local_day_treats_naive_received_utc_as_utc(monkeypatch):
+    monkeypatch.setenv("OUTLOOKS_TIMEZONE", "America/Los_Angeles")
+    try:
+        with monkeypatch.context() as machine:
+            machine.setenv("TZ", "America/Los_Angeles")
+            time.tzset()
+            assert lk.local_day("2026-01-01T01:00:00") == "2025-12-31"
+    finally:
+        time.tzset()

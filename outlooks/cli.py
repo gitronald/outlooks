@@ -81,10 +81,12 @@ def import_(
 ) -> None:
     """Archive the capture hook's files and record the complete window pulls."""
     from outlooks import capture as cp
+    from outlooks import config
     from outlooks import coverage as cv
+    from outlooks.timestamps import fmt_ts
 
     box = _mailbox(mailbox)
-    captures, other = cp.load_captures(paths or [cp.captured_dir()])
+    captures, other = cp.load_captures(paths or [config.captured_dir()])
     done = cp.import_captures(captures, mailbox=box, replace=replace)
     typer.echo(
         f"{len(captures)} captures ({done.other_mailbox} other mailbox), "
@@ -144,7 +146,7 @@ def import_(
                 if w.total is None
                 else f"{len(w.offsets)} of {w.total} offsets captured"
             )
-            typer.echo(f"  INCOMPLETE window {cv.fmt_ts(w.after)}: {got}")
+            typer.echo(f"  INCOMPLETE window {fmt_ts(w.after)}: {got}")
     for row in rows:
         typer.echo(
             f"  COVERED {row['after']} to {row['before']}: "
@@ -479,12 +481,13 @@ def totals(
     ] = None,
 ) -> None:
     """Window sizes from the captures, or the item-id proof for a range."""
-    from outlooks.capture import captured_dir, load_captures
-    from outlooks.coverage import fmt_ts, parse_ts
+    from outlooks import config
+    from outlooks.capture import load_captures
     from outlooks.sizing import id_check, window_sizes
+    from outlooks.timestamps import fmt_ts, parse_ts
 
     box = _mailbox(None)
-    captures, _ = load_captures(sorted(captured_dir().glob("*.json")))
+    captures, _ = load_captures(sorted(config.captured_dir().glob("*.json")))
     if check_range:
         try:
             after, before = (parse_ts(t) for t in check_range)
@@ -641,8 +644,8 @@ def windows_init(
     """Start a plan over a fixed range; print the range probe and the month pieces."""
     from datetime import UTC, datetime
 
-    from outlooks import coverage as cv
     from outlooks import window_plan as wp
+    from outlooks.timestamps import fmt_ts
 
     folder = _state_dir()
     if (folder / "windows.json").exists():
@@ -655,26 +658,27 @@ def windows_init(
     except wp.PlanError as e:
         raise _fail(e) from None
     wp.save(plan, folder)
-    typer.echo(f"range {cv.fmt_ts(plan.after)} {cv.fmt_ts(plan.before)}")
+    typer.echo(f"range {fmt_ts(plan.after)} {fmt_ts(plan.before)}")
     for piece in plan.pieces:
-        typer.echo(f"{cv.fmt_ts(piece.after)} {cv.fmt_ts(piece.before)}")
+        typer.echo(f"{fmt_ts(piece.after)} {fmt_ts(piece.before)}")
 
 
 @windows_app.command("fill")
 def windows_fill() -> None:
     """Apply the sizes the captures carry; list the pieces still unsized."""
-    from outlooks import coverage as cv
+    from outlooks import config
     from outlooks import window_plan as wp
-    from outlooks.capture import captured_dir, load_captures
+    from outlooks.capture import load_captures
     from outlooks.sizing import window_sizes
+    from outlooks.timestamps import fmt_ts
 
     folder = _state_dir()
     plan = _plan(folder)
-    captures, _ = load_captures(sorted(captured_dir().glob("*.json")))
+    captures, _ = load_captures(sorted(config.captured_dir().glob("*.json")))
     wp.fill(plan, window_sizes(captures, _mailbox(None)))
     wp.save(plan, folder)
     total = "?" if plan.total is None else str(plan.total)
-    typer.echo(f"range {cv.fmt_ts(plan.after)} {cv.fmt_ts(plan.before)} {total}")
+    typer.echo(f"range {fmt_ts(plan.after)} {fmt_ts(plan.before)} {total}")
     known = [p.total for p in plan.pieces if p.total is not None]
     unknown = [p for p in plan.pieces if p.total is None]
     over = sum(1 for n in known if n > wp.LIMIT)
@@ -683,24 +687,24 @@ def windows_fill() -> None:
         f"unknown {len(unknown)} over-LIMIT {over}"
     )
     for piece in unknown:
-        typer.echo(f"{cv.fmt_ts(piece.after)} {cv.fmt_ts(piece.before)}")
+        typer.echo(f"{fmt_ts(piece.after)} {fmt_ts(piece.before)}")
 
 
 @windows_app.command("split")
 def windows_split() -> None:
     """Split every piece over the limit; print the new pieces to size."""
-    from outlooks import coverage as cv
     from outlooks import window_plan as wp
+    from outlooks.timestamps import fmt_ts
 
     folder = _state_dir()
     plan = _plan(folder)
     new, unsplittable = wp.split(plan)
     wp.save(plan, folder)
     for piece in new:
-        typer.echo(f"{cv.fmt_ts(piece.after)} {cv.fmt_ts(piece.before)}")
+        typer.echo(f"{fmt_ts(piece.after)} {fmt_ts(piece.before)}")
     for piece in unsplittable:
         typer.echo(
-            f"unsplittable {cv.fmt_ts(piece.after)} {cv.fmt_ts(piece.before)}",
+            f"unsplittable {fmt_ts(piece.after)} {fmt_ts(piece.before)}",
             err=True,
         )
 
@@ -730,11 +734,12 @@ def windows_remaining() -> None:
     """List the pieces coverage.csv does not cover yet."""
     from outlooks import coverage as cv
     from outlooks import window_plan as wp
+    from outlooks.timestamps import fmt_ts
 
     left = wp.remaining(_plan(_state_dir()), cv.read_rows())
     for piece in left:
         total = "?" if piece.total is None else str(piece.total)
-        typer.echo(f"{cv.fmt_ts(piece.after)} {cv.fmt_ts(piece.before)} {total}")
+        typer.echo(f"{fmt_ts(piece.after)} {fmt_ts(piece.before)} {total}")
     typer.echo(f"{len(left)} pieces not covered", err=True)
 
 

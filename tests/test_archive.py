@@ -314,3 +314,16 @@ def test_classify_has_no_decision_role_when_the_tag_is_unset(tmp_path, monkeypat
     # Still ours (the sender is a configured own_address), just never tagged
     # as a decision when no decision_tag is configured to look for.
     assert cl.classify(decision).role == "ours"
+
+
+def test_newest_hit_compares_instants_and_keeps_the_original_timestamp(tmp_path):
+    timestamps = ["2026-03-20T01:00:00+02:00", "2026-03-19T23:30:00Z"]
+    store.save_hits(
+        [
+            {"internetMessageId": f"<{n}@example.org>", "receivedDateTime": value}
+            for n, value in enumerate(timestamps)
+        ],
+        mailbox="desk@example.org",
+        root=tmp_path,
+    )
+    assert store.newest_hit(tmp_path) == timestamps[1]
