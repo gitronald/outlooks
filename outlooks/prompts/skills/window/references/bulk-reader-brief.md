@@ -6,7 +6,8 @@ Two rules come before everything else:
 
 - **One `read_resource` call at a time, never two in one turn.** Every
   reader shares one rate limit on the connector, and the round is sized for
-  each reader to have one call in flight.
+  each reader to have one call in flight. The captures record every call's
+  timing by reader, so a parallel pair shows up after the round.
 - **Never type, retype, or copy a uri out of the worklist.** Get each one
   from `{cli} uri` right before its call and pass what it printed. The ids
   are long and differ near the end, so a retyped one reads a neighbouring

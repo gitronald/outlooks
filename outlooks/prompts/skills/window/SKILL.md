@@ -277,6 +277,12 @@ directly with the pager brief, because `batches` skips covered windows.
    already shared; run fewer readers or wait for it to finish.
 4. **Step `read-import`.** **Import, then re-run `{cli} worklist`**: what it prints is the next
    round. Count from the captures, never from the readers' reports.
+   `import` ends its attachment lines with `last read round:`, the newest
+   round's readers, reads, and calls a minute, taken from the captures'
+   `agent_id` and `duration_ms` (the hook keeps both). A `PARALLEL reads`
+   line under it counts the readers that made a call while another of their
+   own was in flight; the throttle's budget assumes none did, so run the
+   next round with fewer readers if it recurs.
    Rebuild only between rounds, and only once every reader's task has
    *completed*: a reader's report can arrive before it stops, and one that
    is still running will pick up the rebuilt files and re-read someone
@@ -321,7 +327,7 @@ directly with the pager brief, because `batches` skips covered windows.
   together and trip it again. A second 429 on the same uri waits 120-150
   seconds. The capture hook is PostToolUse, so a throttled call leaves no
   capture: the captures per minute are the successful reads, and the way to
-  measure a round's rate.
+  measure a round's rate (`import`'s `last read round:` line).
 - **Attachments are picked by their own entry.** A reader that takes the
   neighbouring entry's uri reads an inline logo in place of a document. The
   briefs say to check each entry's `contentType`/`isInline` and read that

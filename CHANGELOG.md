@@ -30,6 +30,11 @@ what a consuming repo has to do about it:
   reader run it right before every read instead of copying the uri out of
   the whole file, so a retyped uri can no longer read a neighbouring message
   and a call past the last line reads nothing.
+- `outlooks import` prints a `last read round:` line (the newest round of
+  reader subagents, its reads, and its calls a minute) and, under it, a
+  `PARALLEL reads` line for readers that made a call while another of their
+  own was in flight. Both come from the `agent_id` and `duration_ms` that
+  Claude Code passes the capture hook, which the hook already keeps.
 
 ### Changed
 
