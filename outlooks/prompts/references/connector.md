@@ -143,10 +143,11 @@ extraction failed"). The note is not attachment text: `import` refuses it
 
 A calendar invite (`text/calendar`, `application/ics`, a `.ics` file) always
 comes back as a "Binary attachment" note, never text: skip its read like an
-image's. `{cli} audit` counts it as missing but never lists it for a re-read.
-Any other attachment that a read got the "Binary attachment" note for (a
-scheduled report's PDF, say) gets the same note on every re-read, so
-`{cli} audit` counts it under `binary`, by type, rather than as missing.
+image's. `{cli} audit` counts a skipped invite as missing but never lists it
+for a re-read. Any attachment that a read got the "Binary attachment" note
+for (a scheduled report's PDF, say, or an invite read anyway) gets the same
+note on every re-read, so `{cli} audit` counts it under `binary`, by type,
+rather than as missing.
 
 A result too large for the context (a long thread, about 55k characters or
 more) reaches the hook only as a note naming the file Claude Code saved it
