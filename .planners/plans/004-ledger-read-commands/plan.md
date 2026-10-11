@@ -1,10 +1,10 @@
 ---
 id: 4
 slug: ledger-read-commands
-status: implemented
+status: done
 branch: feature/ledger-read-commands
 created: 2026-10-11T15:21:09-07:00
-concluded:
+concluded: 2026-10-11T15:33:00-07:00
 pr: https://github.com/gitronald/outlooks/pull/13
 ---
 
@@ -123,3 +123,35 @@ connector call, and write nothing.
     every message joins by subject. A blank subject joins nothing.
   - A word no row has prints the ledger's outcome words, exit 0.
 - **2026-10-11T15:30:04-07:00** — Implemented: 4 commits ahead of `dev`.
+- **2026-10-11T15:39:11-07:00** — Review gate passed (`/code-review` at medium,
+  posted to the PR); fixes in `050a6b1`. Full gate green: ruff, ruff format,
+  pyrefly, pytest (535 passed).
+  - Review follow-up:
+    - Piped output was cut to 80 columns (`shutil.get_terminal_size` falls back
+      when stdout is not a terminal), so an agent running the sweep saw
+      ellipsized values. Fixed: values are cut only on a terminal or when
+      `COLUMNS` is set; tests for `ledger` and `thread` with `COLUMNS` unset.
+    - `ledger --outcome` read the whole archive even when the ledger has
+      `sender` and `subject`. Fixed: the archive is read only for a missing
+      column (`ledger.fallback`); a test fails if it is read.
+    - `--since` parsing duplicated `worklist.bound`. Fixed by calling it; the
+      bad-date test covers it. The same inline copy in `coverage` predates
+      this plan and was left.
+    - Conscious no-op: `thread` would fail on a full message archived without
+      `receivedDateTime`. Every archive reader assumes that field; it is the
+      archive's contract, not this plan's to change.
+
+## Retrospective
+
+- The spec held up; the gaps were in what "the terminal width" means. A
+  command written for an operator is also read by an agent through a pipe,
+  and the review caught that truncation silently hid the values the sweep
+  skill sends the agent to read.
+- Joining hits by subject needed two rules the plan did not state: a target
+  with no `conversationId` joins everything by subject, and a blank subject
+  joins nothing, or every subject-less message becomes one thread.
+- Keeping the received time and key uncut, and cutting the widest of the
+  rest, was the difference between a readable narrow listing and one where
+  every column was cut to the same stub.
+- Next time a plan adds terminal output, say in the spec how it behaves when
+  piped.
