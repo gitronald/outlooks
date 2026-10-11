@@ -24,6 +24,9 @@ list key takes a comma-separated value):
 - ``timezone`` (``America/Los_Angeles``): the zone dates are reported in.
 - ``profile`` (none): the repo's profile, the prose the skill reads for what
   this package cannot know (registries, sweep classes, filing, cross-checks).
+- ``sweep_cadence`` (none): how often a scheduled sweep runs, as entries
+  ``"<every>"`` or ``"<YYYY-MM-DD> <every>"`` (``outlooks.cadence`` parses
+  them; ``outlooks due`` reads them).
 
 An entry of ``system_senders`` or ``notice_senders`` is an address, or a
 pattern in which ``*`` stands for any run of characters (``postmaster@*``),
@@ -85,6 +88,7 @@ KEYS = (
     "timezone",
     "render_label",
     "profile",
+    "sweep_cadence",
 )
 
 
@@ -107,6 +111,7 @@ class Settings:
     timezone: ZoneInfo
     render_label: str  # the label `render` gives a file when --label is not passed
     profile: Path | None
+    sweep_cadence: tuple[str, ...]  # entries as written; outlooks.cadence parses
     origins: dict[str, str]  # key -> "env", "pyproject.toml", or "default"
 
 
@@ -150,6 +155,15 @@ def load(start: Path | None = None) -> Settings:
             raise ConfigError(f"[tool.outlooks] {key} must be a list of addresses")
         return tuple(str(a).strip().lower() for a in items if str(a).strip())
 
+    def entries(key: str) -> tuple[str, ...]:
+        value = raw(key)
+        if value is None:
+            return ()
+        items = value.split(",") if isinstance(value, str) else value
+        if not isinstance(items, list):
+            raise ConfigError(f"[tool.outlooks] {key} must be a list of strings")
+        return tuple(str(e).strip() for e in items if str(e).strip())
+
     def path(key: str) -> Path | None:
         value = get(key)
         if value is None:
@@ -179,6 +193,7 @@ def load(start: Path | None = None) -> Settings:
         timezone=ZoneInfo(get("timezone") or DEFAULTS["timezone"]),
         render_label=get("render_label") or DEFAULTS["render_label"],
         profile=path("profile"),
+        sweep_cadence=entries("sweep_cadence"),
         origins=origins,
     )
 
@@ -332,5 +347,6 @@ def describe() -> list[tuple[str, str, str]]:
         "timezone": s.timezone.key,
         "render_label": s.render_label,
         "profile": s.profile or "(unset)",
+        "sweep_cadence": ", ".join(s.sweep_cadence) or "(unset)",
     }
     return [(k, str(values[k]), s.origins.get(k, "default")) for k in KEYS]
