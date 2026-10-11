@@ -1,7 +1,7 @@
 ---
 id: 4
 slug: ledger-read-commands
-status: active
+status: implemented
 branch: feature/ledger-read-commands
 created: 2026-10-11T15:21:09-07:00
 concluded:
@@ -122,3 +122,4 @@ connector call, and write nothing.
   - When the named message has no `conversationId` (a hit never read in full),
     every message joins by subject. A blank subject joins nothing.
   - A word no row has prints the ledger's outcome words, exit 0.
+- **2026-10-11T15:30:04-07:00** — Implemented: 4 commits ahead of `dev`.
