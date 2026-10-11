@@ -416,6 +416,7 @@ def senders(
     from datetime import date
 
     from outlooks import senders as sd
+    from outlooks.detail import printable
 
     box = _mailbox(mailbox)
     start = None
@@ -429,7 +430,8 @@ def senders(
     total = sum(s.count for s in found)
     typer.echo(f"senders for {box}{scope}: {total} inbound hits")
     for s in found:
-        typer.echo(f"{s.count:6}  {s.mark:8}  {s.address or '(no sender)'}")
+        address = printable(s.address) if s.address else "(no sender)"
+        typer.echo(f"{s.count:6}  {s.mark:8}  {address}")
     unlisted = sum(1 for s in found if s.mark == "unlisted")
     typer.echo(
         f"{unlisted} unlisted; a notifier, not a person, belongs in "
@@ -614,6 +616,7 @@ def worklist(
 ) -> None:
     """Reader worklists for a full read of a range (window mode's bulk read)."""
     from outlooks import worklist as wl
+    from outlooks.detail import printable
 
     try:
         result = wl.read_worklist(after, before, out, per=per, name=name)
@@ -631,7 +634,8 @@ def worklist(
             f"{result.orphans} archived hits in range that no window capture lists"
         )
     for hit in result.todo:
-        typer.echo(f"{hit['receivedDateTime']} {(hit.get('subject') or '')[:70]}")
+        subject = printable((hit.get("subject") or "")[:70])
+        typer.echo(f"{hit['receivedDateTime']} {subject}")
 
 
 @app.command()
@@ -709,6 +713,7 @@ def audit(
 ) -> None:
     """Attachment-text audit for the archived messages of a period."""
     from outlooks import worklist as wl
+    from outlooks.detail import printable
 
     result = wl.audit(prefix)
     typer.echo(str(dict(result.counts)))
@@ -718,7 +723,7 @@ def audit(
         typer.echo(f"  MISSING {line}")
     typer.echo(f"never attempted: {len(result.untried)}")
     for name, ctype, _ in result.untried:
-        typer.echo(f"  UNTRIED {name} {ctype}")
+        typer.echo(f"  UNTRIED {name} {printable(ctype)}")
     if sweep:
         sweep.write_text(
             "".join(f"att-{name} {uri}\n" for name, _, uri in result.untried),

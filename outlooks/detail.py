@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,18 @@ __all__ = [
 BLOCK = re.compile(r"</?(?:div|p|li|tr|h[1-6])\b[^>]*>|<br\s*/?>", re.I)
 TAG = re.compile(r"<[^>]+>")
 BLANK_RUN = re.compile(r"\n{3,}")
+
+
+def printable(text: str) -> str:
+    """``text`` with every control character written as ``\\xNN``.
+
+    A sender writes the subject, the body, and the attachment names, so a
+    terminal escape sequence in one would otherwise reach the operator's
+    terminal: it could clear lines, rewrite them, or forge new ones.
+    """
+    return "".join(
+        f"\\x{ord(c):02x}" if unicodedata.category(c) == "Cc" else c for c in text
+    )
 
 
 def body_text(message: dict[str, Any]) -> str:

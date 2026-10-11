@@ -327,3 +327,10 @@ def test_newest_hit_compares_instants_and_keeps_the_original_timestamp(tmp_path)
         root=tmp_path,
     )
     assert store.newest_hit(tmp_path) == timestamps[1]
+
+
+def test_printable_escapes_control_characters_and_keeps_the_rest():
+    from outlooks.detail import printable
+
+    assert printable("Café \U0001f600 – ok") == "Café \U0001f600 – ok"
+    assert printable("a\x1b[2Jb\nc\x9bd\x7f") == "a\\x1b[2Jb\\x0ac\\x9bd\\x7f"

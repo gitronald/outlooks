@@ -21,6 +21,7 @@ from typing import Any
 
 from outlooks import classify, store
 from outlooks.coverage import ledger_rows, local_time
+from outlooks.detail import printable
 from outlooks.timestamps import parse_ts
 
 # The columns the package relies on; every other column is the profile's.
@@ -97,8 +98,8 @@ def table(
         mid = r.get("internet_message_id") or ""
         mail = classify.view(archive[mid]) if missing and mid in archive else None
         known = {
-            "sender": mail.sender if mail else "",
-            "subject": mail.subject if mail else "",
+            "sender": _one_line(mail.sender) if mail else "",
+            "subject": _one_line(mail.subject) if mail else "",
         }
         out.append(
             [
@@ -113,7 +114,8 @@ def table(
 
 
 def _one_line(value: str) -> str:
-    return " ".join(value.split())
+    """``value`` on one line, safe to print (:func:`~outlooks.detail.printable`)."""
+    return printable(" ".join(value.split()))
 
 
 def cut(value: str, width: int) -> str:

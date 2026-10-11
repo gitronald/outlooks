@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from outlooks import classify, store
-from outlooks.detail import body_text
+from outlooks.detail import body_text, printable
 
 # The shortest archive-key prefix a message may be named by.
 MIN_PREFIX = 6
@@ -31,7 +31,11 @@ class ThreadError(Exception):
 
 @dataclass(frozen=True)
 class Entry:
-    """One archived message of the thread, as ``thread`` prints it."""
+    """One archived message of the thread, as ``thread`` prints it.
+
+    The sender's fields are :func:`~outlooks.detail.printable`, so they are
+    safe to print.
+    """
 
     mid: str
     received: datetime
@@ -99,9 +103,9 @@ def thread(mid: str, payloads: dict[str, dict[str, Any]]) -> list[Entry]:
                 mid=k,
                 received=mail.received,
                 direction=classify.direction(mail.sender, list(mail.recipients)),
-                sender=mail.sender,
-                subject=mail.subject,
-                first_line=_first_line(payloads[k], mail),
+                sender=printable(mail.sender),
+                subject=printable(mail.subject),
+                first_line=printable(_first_line(payloads[k], mail)),
                 by_subject=by_subject,
                 is_target=k == mid,
             )

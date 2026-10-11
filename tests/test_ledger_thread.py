@@ -400,3 +400,41 @@ def test_thread_piped_output_keeps_the_whole_first_line(monkeypatch):
     result = invoke("thread", "<p1@example.com>")
     assert result.exit_code == 0, result.output
     assert result.output.splitlines()[2] == f"      {body.strip()}"
+
+
+ESC = "\x1b"
+
+
+def test_thread_prints_a_senders_control_characters_escaped():
+    message(
+        "<e1@example.com>",
+        "2026-03-01T17:00:00Z",
+        f"ada{ESC}@example.com",
+        [BOX],
+        f"Dates{ESC}[2J\nforged line",
+        f"{ESC}]0;title\x07Hello",
+    )
+    result = invoke("thread", "<e1@example.com>")
+    assert result.exit_code == 0, result.output
+    assert ESC not in result.output
+    assert "\x07" not in result.output
+    lines = result.output.splitlines()
+    assert lines[1] == (
+        "* 2026-03-01 09:00  in   ada\\x1b@example.com  Dates\\x1b[2J\\x0aforged line"
+    )
+    assert lines[2] == "      \\x1b]0;title\\x07Hello"
+    assert lines[3].startswith("last written by ada\\x1b@example.com (in)")
+
+
+def test_ledger_prints_archive_and_ledger_control_characters_escaped():
+    write_ledger(
+        [row(1, "2026-03-01T17:00:00Z", "deferred", note=f"see{ESC}[1A")],
+        ("internet_message_id", "received", "outcome", "note"),
+    )
+    hit("<m1@example.com>", "2026-03-01T17:00:00Z", "ada@example.com", f"Hi{ESC}[K")
+    result = invoke("ledger", "--outcome", "deferred")
+    assert result.exit_code == 0, result.output
+    assert ESC not in result.output
+    line = result.output.splitlines()[1]
+    assert "Hi\\x1b[K" in line
+    assert line.rstrip().endswith("see\\x1b[1A")

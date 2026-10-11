@@ -604,3 +604,17 @@ def test_read_worklist_refuses_a_nonpositive_per_before_clearing(tmp_path):
     with pytest.raises(wl.WorklistError, match="per must be at least 1"):
         wl.read_worklist("2026-03-10", "2026-03-12", out, per=0)
     assert (out / "batch-01.txt").read_text(encoding="utf-8") == "a reader's batch\n"
+
+
+def test_audit_lists_an_attachment_name_control_characters_escaped():
+    owner = f"?owner={BOX}"
+    att = {
+        "name": "report\x1b[2J.pdf",
+        "contentType": "application/pdf",
+        "uri": f"mail:///messages/M1%3D/attachments/A1{owner}",
+    }
+    store.save_message(message(1, [att]))
+    result = wl.audit("2026")
+    assert result.listed == [
+        f"{store.id_hash('<m1@example.com>')}.1  application/pdf  report\\x1b[2J.pdf"
+    ]
