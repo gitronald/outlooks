@@ -44,6 +44,14 @@ what a consuming repo has to do about it:
   `sweep` brings back and a scheduled run's report, and `thread` for
   checking a candidate's thread at step `approval`.
 
+### Fixed
+
+- A control character in a field a sender writes (a subject, a sender's
+  address, a body's first line, an attachment's name or type, a ledger
+  value) is printed as `\xNN` by `thread`, `ledger`, `senders`,
+  `worklist`, and `audit`, so a terminal escape sequence in a message can
+  no longer clear, rewrite, or forge lines of their output.
+
 ## [0.7.0] - 2026-10-11
 
 ### Added

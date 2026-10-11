@@ -273,8 +273,8 @@ step runs as written.
 3. **Nothing is committed.** Step `report` names the worklist file, the
    ledger and archive files the run changed, the deferred count, and the
    command that lists the deferred rows (`{cli} ledger --outcome <the
-   deferred word>`), and leaves the commit to the operator. The next run's `{cli} due` reads the
-   uncommitted ledger, so nothing is swept twice.
+   deferred word>`), and leaves the commit to the operator. The next run's
+   `{cli} due` reads the uncommitted ledger, so nothing is swept twice.
 
 A run that fails partway leaves the archive imported and the ledger short;
 the next `{cli} due` reports the unclassified mail and the next run
