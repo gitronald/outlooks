@@ -228,3 +228,45 @@ Flag hygiene issues; don't fix them unasked. Run `{cli} import` once more, so an
 read during filing is archived, and say how much mail the sweep archived
 (pages and full messages). Offer to commit the ledger, the archive, and
 whatever the filing step changed.
+
+## Running on a schedule
+
+A sweep started by a scheduler (`/loop`, a cron, a hosted routine) has
+nobody at step `approval`. Such a run is started with the word `scheduled`
+(`/loop /outlooks sweep scheduled`), and it changes three things. Every other
+step runs as written.
+
+1. **Check first.** Run `{cli} due` (with `--ledger <path>` when the
+   profile's *Ledger columns* moves the ledger) and read its last line,
+   `next sweep due`:
+   - `never`: no sweep falls due under the schedule: the cadence is unset,
+     is `off` with nothing after it, or turns `off` before the interval in
+     force runs out. Report that, and for a self-paced loop, end the loop.
+   - a UTC instant: not due yet. Report it and stop; a self-paced loop wakes
+     at that instant (or at its longest allowed delay, whichever is sooner)
+     and checks again.
+   - `now`: sweep. `due` exits 0 only in this case, so a shell test can gate
+     on it too.
+
+   The interval and its change points are `sweep_cadence` in
+   `[tool.outlooks]`; `{cli} due` prints the cadence in force. A sweep is
+   due at once, whatever the interval, while the archive holds mail the
+   ledger does not list, so a run that archived and stopped short of the
+   ledger is finished by the next one.
+2. **Step `approval` does not wait.** Write what it would have presented to
+   `sweep-<YYYY-MM-DD>.md` in `scratch_dir` (which `{cli} config` prints; the
+   date is in the configured zone, and a second run the same day appends a
+   new section). Then record every
+   candidate with the profile's word for `deferred`, with a note saying what
+   it needs, and every skipped message with its default outcome, as step
+   `ledger` describes. Step `file` never runs unattended: deferred rows come
+   back into the next attended sweep's approval table through step `sweep`,
+   and the operator files them there.
+3. **Nothing is committed.** Step `report` names the worklist file, the
+   ledger and archive files the run changed, and the deferred count, and
+   leaves the commit to the operator. The next run's `{cli} due` reads the
+   uncommitted ledger, so nothing is swept twice.
+
+A run that fails partway leaves the archive imported and the ledger short;
+the next `{cli} due` reports the unclassified mail and the next run
+finishes it.

@@ -44,6 +44,7 @@ def outlooks_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("OUTLOOKS_SCRATCH_DIR", str(tmp_path / "scratch"))
     monkeypatch.delenv("OUTLOOKS_PROFILE", raising=False)
     monkeypatch.delenv("OUTLOOKS_RENDER_LABEL", raising=False)
+    monkeypatch.delenv("OUTLOOKS_SWEEP_CADENCE", raising=False)
     # Where Claude Code would save an oversized result: a spill note is
     # followed only into this directory's projects/.
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))

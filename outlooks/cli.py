@@ -2,6 +2,7 @@
 
     outlooks import [<capture-dir-or-file> ...] [--replace]
     outlooks coverage [--since YYYY-MM-DD] [--ledger <ledger.csv>]
+    outlooks due [--ledger <ledger.csv>]
     outlooks senders [--since YYYY-MM-DD]
     outlooks save <message.json> [--text <attachment.txt>] | <hits.json> --hits
     outlooks render <message.json> --out <dir> [--text <att.txt>]
@@ -53,6 +54,15 @@ DIFFERS_SHOWN = 5
 def _fail(message: object) -> typer.Exit:
     typer.echo(f"Error: {message}", err=True)
     return typer.Exit(1)
+
+
+def _ledger(ledger: Path | None) -> Path:
+    """The sweep's ledger: ``--ledger``, or ``ledger.csv`` in ``archive_dir``."""
+    from outlooks import coverage as cv
+
+    if ledger is not None and not ledger.is_file():
+        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
+    return ledger or cv.ledger_csv()
 
 
 def _mailbox(mailbox: str | None) -> str:
@@ -206,19 +216,67 @@ def coverage(
             start = datetime.fromisoformat(since).replace(tzinfo=config.zone())
         except ValueError:
             raise _fail(f"{since!r} is not a YYYY-MM-DD date") from None
-    if ledger is not None and not ledger.is_file():
-        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
+    ledger_path = _ledger(ledger)
     hits = store.load_hits()
     lines = cv.report(
         box,
         cv.read_rows(),
         hits,
         set(store.load_messages()),
-        cv.read_rows(ledger or cv.ledger_csv()),
+        cv.read_rows(ledger_path),
         since=start,
         skipped=cv.mass_copies(hits, cv.read_rows(cv.mass_sends_csv())),
     )
     typer.echo("\n".join(lines))
+
+
+@app.command()
+def due(
+    mailbox: Annotated[str | None, typer.Option(help="Mailbox to check.")] = None,
+    ledger: Annotated[
+        Path | None,
+        typer.Option(help="The sweep's ledger (default: ledger.csv in archive_dir)."),
+    ] = None,
+) -> None:
+    """Say when the next scheduled sweep is due (read-only); exit 0 when due now."""
+    from datetime import UTC, datetime
+
+    from outlooks import cadence, config, store
+    from outlooks import coverage as cv
+    from outlooks.timestamps import fmt_ts
+
+    box = _mailbox(mailbox)
+    try:
+        steps = cadence.parse(config.settings().sweep_cadence)
+    except config.ConfigError as e:
+        raise _fail(e) from None
+    ledger_rows = cv.read_rows(_ledger(ledger))
+    now = datetime.now(UTC)
+    covered = cv.merge([r for r in cv.read_rows() if r["mailbox"] == box])
+    last = covered[-1][1] if covered else None
+    mark = cv.high_water(ledger_rows, box)
+    lag = cv.unclassified(box, covered, store.load_hits(), ledger_rows, mark)
+    when = cadence.next_due(steps, last, lag, now)
+    local = cv.local_time
+    force = cadence.in_force(steps, now)
+    described = "; ".join(s.describe() for s in steps) or "(unset)"
+    lines = [
+        f"cadence                 {described}",
+        f"in force now            {force.describe() if force else '(none)'}",
+        f"last sweep              {local(last) if last else '(no coverage)'}",
+        f"ledger high-water mark  {local(mark) if mark else '(no rows)'}",
+        f"unclassified            {lag}",
+    ]
+    due_now = when is not None and when <= now
+    if when is None:
+        lines.append("next sweep due          never")
+    elif due_now:
+        lines.append("next sweep due          now")
+    else:
+        lines.append(f"next sweep due          {fmt_ts(when)}")
+    typer.echo("\n".join(lines))
+    if not due_now:
+        raise typer.Exit(1)
 
 
 @app.command()

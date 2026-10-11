@@ -325,8 +325,49 @@ def _covered(ts: datetime | None, spans: list[tuple[datetime, datetime]]) -> boo
     return ts is not None and any(a <= ts <= b for a, b in spans)
 
 
-def _local_time(ts: datetime) -> str:
+def local_time(ts: datetime) -> str:
+    """``ts`` in the configured zone, to the minute, as the reports print it."""
     return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
+
+
+def _ledger_rows(ledger: list[dict[str, str]], mailbox: str) -> list[dict[str, str]]:
+    """``ledger``'s rows for ``mailbox``; with no ``mailbox`` column, all of them."""
+    return [r for r in ledger if r.get("mailbox", mailbox).lower() == mailbox]
+
+
+def high_water(ledger: list[dict[str, str]], mailbox: str) -> datetime | None:
+    """The latest ``received`` among ``mailbox``'s ledger rows, or ``None``."""
+    rows = _ledger_rows(ledger, mailbox)
+    marks = [parse_ts(r["received"]) for r in rows if r.get("received")]
+    return max(marks, default=None)
+
+
+def unclassified(
+    mailbox: str,
+    covered: list[tuple[datetime, datetime]],
+    hits: dict[str, dict[str, Any]],
+    ledger: list[dict[str, str]],
+    mark: datetime | None,
+) -> int:
+    """Covered hits received after the ledger's high-water mark that it does not list.
+
+    The mail a sweep archived and did not classify. Coverage ends at the instant
+    a sweep pulled its window, after the newest message it listed, so comparing
+    the mark with the end of coverage would call every finished sweep behind.
+    With no ledger rows, every covered hit counts.
+
+    ``covered`` is :func:`merge` of ``mailbox``'s rows and ``mark`` its
+    :func:`high_water`, which the callers have already computed.
+    """
+    listed = {r.get("internet_message_id") for r in _ledger_rows(ledger, mailbox)}
+    return sum(
+        h.get("mailbox") == mailbox
+        and mid not in listed
+        and (ts := _received(h)) is not None
+        and (mark is None or ts > mark)
+        and _covered(ts, covered)
+        for mid, h in hits.items()
+    )
 
 
 def next_sweep(mark: datetime | None, end: datetime | None) -> datetime | None:
@@ -371,7 +412,7 @@ def report(
         lines.append("no windows recorded")
     for a, b in covered:
         n = sum(_covered(_received(h), [(a, b)]) for h in hits.values())
-        lines.append(f"  covered  {_local_time(a)} to {_local_time(b)}  {n} archived")
+        lines.append(f"  covered  {local_time(a)} to {local_time(b)}  {n} archived")
     start = since or (covered[0][0] if covered else None)
     if start is not None:
         for a, b in gaps(covered, start, now):
@@ -382,7 +423,7 @@ def report(
                 for h in hits.values()
             )
             note = f"  {n} archived (lookup only)" if n else ""
-            lines.append(f"  GAP      {_local_time(a)} to {_local_time(b)}{note}")
+            lines.append(f"  GAP      {local_time(a)} to {local_time(b)}{note}")
     unread: Counter[str] = Counter()
     by_design = 0
     for mid, h in hits.items():
@@ -398,19 +439,18 @@ def report(
         lines += [f"  {month}  {n}" for month, n in sorted(unread.items())]
     if by_design:
         lines.append(f"mass-send copies left unread by design  {by_design}")
-    marks = [
-        parse_ts(r["received"])
-        for r in ledger
-        if r.get("received") and r.get("mailbox", mailbox).lower() == mailbox
-    ]
-    mark = max(marks, default=None)
+    mark = high_water(ledger, mailbox)
     end = covered[-1][1] if covered else None
     if mark is not None:
-        lines.append(f"ledger high-water mark  {_local_time(mark)}")
+        lines.append(f"ledger high-water mark  {local_time(mark)}")
     if end is not None:
-        lines.append(f"coverage ends           {_local_time(end)}")
-        if mark is not None and mark < end:
-            lines.append("  the ledger lags coverage: archived mail not yet classified")
+        lines.append(f"coverage ends           {local_time(end)}")
+        lag = unclassified(mailbox, covered, hits, ledger, mark)
+        if lag:
+            lines.append(
+                f"  the ledger lags coverage: {lag} archived "
+                f"{'message' if lag == 1 else 'messages'} not yet classified"
+            )
     start = next_sweep(mark, end)
     if start is not None:
         # The one line in UTC: it is passed to the connector as printed.

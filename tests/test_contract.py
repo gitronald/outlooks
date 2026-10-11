@@ -77,6 +77,7 @@ PUBLIC = {
             "timezone",
             "render_label",
             "profile",
+            "sweep_cadence",
             "origins",
         ),
         "ConfigError": None,
@@ -107,6 +108,7 @@ KEYS = (
     "timezone",
     "render_label",
     "profile",
+    "sweep_cadence",
 )
 DEFAULTS = {
     "archive_dir": "data/outlook",
@@ -254,6 +256,7 @@ COMMANDS = {
     "coverage",
     "doc",
     "doctor",
+    "due",
     "hash",
     "hook",
     "import",
