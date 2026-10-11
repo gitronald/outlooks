@@ -390,10 +390,10 @@ def thread(
     for e in entries:
         mark = "*" if e.is_target else " "
         note = "  (matched by subject)" if e.by_subject else ""
-        typer.echo(
-            f"{mark} {local_time(e.received)}  {e.direction:3}  {e.sender}  "
-            f"{e.subject}{note}"
-        )
+        head = f"{mark} {local_time(e.received)}  {e.direction:3}  {e.sender}  "
+        # A cut takes the subject's end, so the note always shows.
+        head += e.subject if width is None else cut(e.subject, width - len(head + note))
+        typer.echo(f"{head}{note}")
         if e.first_line:
             line = f"      {e.first_line}"
             typer.echo(line if width is None else cut(line, width))

@@ -438,3 +438,30 @@ def test_ledger_prints_archive_and_ledger_control_characters_escaped():
     line = result.output.splitlines()[1]
     assert "Hi\\x1b[K" in line
     assert line.rstrip().endswith("see\\x1b[1A")
+
+
+def test_thread_cuts_a_long_subject_to_the_terminal_and_keeps_the_note(
+    monkeypatch,
+):
+    message(
+        "<w1@example.com>",
+        "2026-03-01T17:00:00Z",
+        "ada@example.com",
+        [BOX],
+        "Workshop dates " * 6,
+        "Hello",
+    )
+    hit(
+        "<w2@example.com>",
+        "2026-03-02T17:00:00Z",
+        "ada@example.com",
+        "Re: " + "Workshop dates " * 6,
+    )
+    monkeypatch.setenv("COLUMNS", "80")
+    result = invoke("thread", "<w1@example.com>")
+    assert result.exit_code == 0, result.output
+    first, _, matched = result.output.splitlines()[1:4]
+    assert len(first) == 80
+    assert first.endswith("…")
+    assert len(matched) == 80
+    assert matched.endswith("…  (matched by subject)")
