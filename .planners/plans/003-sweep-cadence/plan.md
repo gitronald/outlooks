@@ -1,8 +1,8 @@
 ---
 id: 3
 slug: sweep-cadence
-status: draft
-branch:
+status: active
+branch: feature/sweep-cadence
 created: 2026-10-11T04:57:33-07:00
 concluded:
 pr:
@@ -94,3 +94,11 @@ watching has to leave the mailbox in a state the operator can pick up.
 - `uv run pytest`, `ruff check`, `ruff format --check`, `pyrefly check`.
 - Release as a minor version with `stanza release minor`, after the changelog
   is filled.
+
+## Log
+
+- **2026-10-11T04:57:59-07:00** — Activated.
+  - Branch: `feature/sweep-cadence`
+  - Base: `dev` at `46c626f`
+  - Worktree: `.worktrees/sweep-cadence`
+  - PR: pending
