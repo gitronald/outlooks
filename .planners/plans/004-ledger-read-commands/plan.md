@@ -1,11 +1,11 @@
 ---
 id: 4
 slug: ledger-read-commands
-status: active
+status: done
 branch: feature/ledger-read-commands
 created: 2026-10-11T15:21:09-07:00
-concluded:
-pr:
+concluded: 2026-10-11T15:33:00-07:00
+pr: https://github.com/gitronald/outlooks/pull/13
 ---
 
 # Add read-only commands for the ledger and a message's thread
@@ -106,3 +106,52 @@ connector call, and write nothing.
   - Base: `dev` at `02db059`
   - Worktree: `.worktrees/ledger-read-commands`
   - PR: pending
+- **2026-10-11T15:29:27-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/13
+- **2026-10-11T15:29:53-07:00** — Implemented both commands (`outlooks/ledger.py`,
+  `outlooks/thread.py`, wired in `cli.py`), the sweep skill text, the README
+  rows, the contract pins, and the changelog. Checks: ruff, ruff format,
+  pyrefly, and the full suite (532 passed) ran green in the worktree.
+  Decisions the spec left open:
+  - `--since` without `--outcome` narrows the counts; only `--outcome` lists rows.
+  - A ledger's `mailbox` column is not listed: the rows are already one
+    mailbox's (`coverage.ledger_rows`, made package-public for this).
+  - With more than one `--outcome` word the listing adds an `outcome` column,
+    since the rows would otherwise not say which word each has.
+  - Truncation never cuts `received`, the key, or `outcome`; the other columns
+    are cut widest first, to no less than 8 characters.
+  - When the named message has no `conversationId` (a hit never read in full),
+    every message joins by subject. A blank subject joins nothing.
+  - A word no row has prints the ledger's outcome words, exit 0.
+- **2026-10-11T15:30:04-07:00** — Implemented: 4 commits ahead of `dev`.
+- **2026-10-11T15:39:11-07:00** — Review gate passed (`/code-review` at medium,
+  posted to the PR); fixes in `050a6b1`. Full gate green: ruff, ruff format,
+  pyrefly, pytest (535 passed).
+  - Review follow-up:
+    - Piped output was cut to 80 columns (`shutil.get_terminal_size` falls back
+      when stdout is not a terminal), so an agent running the sweep saw
+      ellipsized values. Fixed: values are cut only on a terminal or when
+      `COLUMNS` is set; tests for `ledger` and `thread` with `COLUMNS` unset.
+    - `ledger --outcome` read the whole archive even when the ledger has
+      `sender` and `subject`. Fixed: the archive is read only for a missing
+      column (`ledger.fallback`); a test fails if it is read.
+    - `--since` parsing duplicated `worklist.bound`. Fixed by calling it; the
+      bad-date test covers it. The same inline copy in `coverage` predates
+      this plan and was left.
+    - Conscious no-op: `thread` would fail on a full message archived without
+      `receivedDateTime`. Every archive reader assumes that field; it is the
+      archive's contract, not this plan's to change.
+
+## Retrospective
+
+- The spec held up; the gaps were in what "the terminal width" means. A
+  command written for an operator is also read by an agent through a pipe,
+  and the review caught that truncation silently hid the values the sweep
+  skill sends the agent to read.
+- Joining hits by subject needed two rules the plan did not state: a target
+  with no `conversationId` joins everything by subject, and a blank subject
+  joins nothing, or every subject-less message becomes one thread.
+- Keeping the received time and key uncut, and cutting the widest of the
+  rest, was the difference between a readable narrow listing and one where
+  every column was cut to the same stub.
+- Next time a plan adds terminal output, say in the spec how it behaves when
+  piped.

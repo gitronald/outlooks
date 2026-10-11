@@ -212,6 +212,8 @@ so one repair never rewrites anything else that differs.
 | `outlooks import [paths] [--replace]` | file the hook's captures; record complete windows |
 | `outlooks coverage [--since] [--ledger]` | covered spans, gaps, unread counts, ledger lag, and the next sweep's start |
 | `outlooks due [--ledger]` | whether a scheduled sweep is due under `sweep_cadence`; last line `next sweep due  now`, a UTC instant, or `never`; exit 0 only when due now |
+| `outlooks ledger [--outcome ...] [--since] [--wide]` | the ledger's rows counted by outcome; with `--outcome`, those rows listed oldest first, with each one's archive key |
+| `outlooks thread <id>` | a message's archived thread, oldest first, and who wrote last; `<id>` is an `internetMessageId` or 6+ characters of its archive key |
 | `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, `notice`, or `unlisted` (`none` for the hits with no sender) |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |

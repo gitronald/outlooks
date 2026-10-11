@@ -23,6 +23,25 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+### Added
+
+- `outlooks ledger`: the sweep's ledger read back, read-only. With no
+  filter it counts the rows by outcome; `--outcome WORD` (repeatable, taken
+  literally, since the words are the profile's) lists those rows oldest
+  first, each with its received time in the configured zone, its archive
+  key, and the ledger's own columns, with sender and subject from the
+  archive when the ledger has none. `--since` narrows to rows received on
+  or after a date; long values are cut to the terminal's width unless
+  `--wide`, and never when the output is not a terminal.
+- `outlooks thread <id>`: a message's archived thread, oldest first, with
+  each message's direction, sender, subject, and first line, and a last
+  line naming who wrote last. `<id>` is an `internetMessageId` or at least
+  six characters of its archive key. Hits never read in full join by
+  subject and are marked so. Exit 1 when the id is not in the archive.
+- The sweep skill names both: `ledger --outcome` for the deferred rows step
+  `sweep` brings back and a scheduled run's report, and `thread` for
+  checking a candidate's thread at step `approval`.
+
 ## [0.7.0] - 2026-10-11
 
 ### Added
