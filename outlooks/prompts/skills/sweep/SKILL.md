@@ -91,6 +91,9 @@ Drop every hit whose `internetMessageId` is already in the ledger. The
 window start is inclusive, so the newest ledger message usually comes back
 once. Then add the ledger's `deferred` rows back as open candidates. They
 sit before the window, so the sweep itself won't return them.
+`{cli} ledger --outcome deferred` lists them, oldest first, with each one's
+archive key (the profile's word in place of `deferred`, and `--ledger
+<path>` when the profile moves the ledger).
 
 ## 2. Classify (step `classify`)
 
@@ -153,6 +156,11 @@ misfile). For each candidate, show:
   (where it goes, under what name, what record it creates or changes)
 - any questions the sender asked that need a reply, and anything the
   profile's checks found missing
+
+Before presenting a candidate, above all a deferred one, run
+`{cli} thread <internetMessageId>` (or the key `{cli} ledger` printed): it
+prints the archived thread and its last line names who wrote last, so the
+table can say whether anyone has answered since.
 
 Wait for the operator's go-ahead, and follow any redirects ("skip this
 one", "file it as the other kind", a different destination). Everything
@@ -263,8 +271,9 @@ step runs as written.
    back into the next attended sweep's approval table through step `sweep`,
    and the operator files them there.
 3. **Nothing is committed.** Step `report` names the worklist file, the
-   ledger and archive files the run changed, and the deferred count, and
-   leaves the commit to the operator. The next run's `{cli} due` reads the
+   ledger and archive files the run changed, the deferred count, and the
+   command that lists the deferred rows (`{cli} ledger --outcome <the
+   deferred word>`), and leaves the commit to the operator. The next run's `{cli} due` reads the
    uncommitted ledger, so nothing is swept twice.
 
 A run that fails partway leaves the archive imported and the ledger short;
