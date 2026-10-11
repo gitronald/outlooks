@@ -838,9 +838,24 @@ def test_unclassified_counts_covered_hits_after_the_mark_the_ledger_lacks():
         {"internet_message_id": "<listed>", "received": "2026-03-25T12:00:00Z"},
     ]
     # <listed> moved the mark to 03-25, so only <new> is behind it.
-    assert cv.unclassified(BOX, rows, hits, ledger) == 1
-    assert cv.unclassified(BOX, rows, hits, []) == 3
-    assert cv.unclassified(BOX, [], hits, []) == 0
+    covered = cv.merge(rows)
+    mark = cv.high_water(ledger, BOX)
+    assert cv.unclassified(BOX, covered, hits, ledger, mark) == 1
+    assert cv.unclassified(BOX, covered, hits, [], None) == 3
+    assert cv.unclassified(BOX, [], hits, [], None) == 0
+
+
+def test_report_shows_the_lag_with_no_ledger_as_due_counts_it():
+    rows = [
+        {
+            "mailbox": BOX,
+            "after": "2026-03-01T08:00:00Z",
+            "before": "2026-04-01T07:00:00Z",
+        }
+    ]
+    hits = {"<a>": {"mailbox": BOX, "receivedDateTime": "2026-03-10T12:00:00Z"}}
+    lines = cv.report(BOX, rows, hits, {"<a>"}, [], now=ts("2026-05-01T07:00:00Z"))
+    assert "  the ledger lags coverage: 1 archived message not yet classified" in lines
 
 
 ROW = {

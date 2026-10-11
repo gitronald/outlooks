@@ -51,6 +51,7 @@ def test_parse_reads_undated_and_dated_entries():
         (["weekly"], "is not <n>d, <n>h, or off"),
         (["7w"], "is not <n>d, <n>h, or off"),
         (["0d"], "an interval of 0"),
+        (["99999999999d"], "too long an interval"),
         (["2027-03-08 1d", "7d"], "an undated entry comes first"),
         (["7d", "7d"], "an undated entry comes first"),
         (["2027-03-08"], "is not <n>d, <n>h, or off"),
@@ -215,3 +216,10 @@ def test_a_cadence_that_is_not_a_list_is_refused(tmp_path, monkeypatch):
     )
     with pytest.raises(config.ConfigError, match="must be a list of strings"):
         config.load(tmp_path)
+
+
+def test_due_refuses_an_interval_too_long_to_represent(monkeypatch):
+    monkeypatch.setenv("OUTLOOKS_SWEEP_CADENCE", "99999999999d")
+    result = runner.invoke(app, ["due"])
+    assert result.exit_code == 1
+    assert "too long an interval" in result.output

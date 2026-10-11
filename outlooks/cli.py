@@ -56,6 +56,15 @@ def _fail(message: object) -> typer.Exit:
     return typer.Exit(1)
 
 
+def _ledger(ledger: Path | None) -> Path:
+    """The sweep's ledger: ``--ledger``, or ``ledger.csv`` in ``archive_dir``."""
+    from outlooks import coverage as cv
+
+    if ledger is not None and not ledger.is_file():
+        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
+    return ledger or cv.ledger_csv()
+
+
 def _mailbox(mailbox: str | None) -> str:
     from outlooks import config
 
@@ -207,15 +216,14 @@ def coverage(
             start = datetime.fromisoformat(since).replace(tzinfo=config.zone())
         except ValueError:
             raise _fail(f"{since!r} is not a YYYY-MM-DD date") from None
-    if ledger is not None and not ledger.is_file():
-        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
+    ledger_path = _ledger(ledger)
     hits = store.load_hits()
     lines = cv.report(
         box,
         cv.read_rows(),
         hits,
         set(store.load_messages()),
-        cv.read_rows(ledger or cv.ledger_csv()),
+        cv.read_rows(ledger_path),
         since=start,
         skipped=cv.mass_copies(hits, cv.read_rows(cv.mass_sends_csv())),
     )
@@ -242,20 +250,14 @@ def due(
         steps = cadence.parse(config.settings().sweep_cadence)
     except config.ConfigError as e:
         raise _fail(e) from None
-    if ledger is not None and not ledger.is_file():
-        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
+    ledger_rows = cv.read_rows(_ledger(ledger))
     now = datetime.now(UTC)
-    rows = cv.read_rows()
-    covered = cv.merge([r for r in rows if r["mailbox"] == box])
+    covered = cv.merge([r for r in cv.read_rows() if r["mailbox"] == box])
     last = covered[-1][1] if covered else None
-    ledger_rows = cv.read_rows(ledger or cv.ledger_csv())
     mark = cv.high_water(ledger_rows, box)
-    lag = cv.unclassified(box, rows, store.load_hits(), ledger_rows)
+    lag = cv.unclassified(box, covered, store.load_hits(), ledger_rows, mark)
     when = cadence.next_due(steps, last, lag, now)
-
-    def local(ts: datetime) -> str:
-        return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
-
+    local = cv.local_time
     force = cadence.in_force(steps, now)
     described = "; ".join(s.describe() for s in steps) or "(unset)"
     lines = [
@@ -265,14 +267,15 @@ def due(
         f"ledger high-water mark  {local(mark) if mark else '(no rows)'}",
         f"unclassified            {lag}",
     ]
+    due_now = when is not None and when <= now
     if when is None:
         lines.append("next sweep due          never")
-    elif when <= now:
+    elif due_now:
         lines.append("next sweep due          now")
     else:
         lines.append(f"next sweep due          {fmt_ts(when)}")
     typer.echo("\n".join(lines))
-    if when is None or when > now:
+    if not due_now:
         raise typer.Exit(1)
 
 

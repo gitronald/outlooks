@@ -239,8 +239,9 @@ step runs as written.
 1. **Check first.** Run `{cli} due` (with `--ledger <path>` when the
    profile's *Ledger columns* moves the ledger) and read its last line,
    `next sweep due`:
-   - `never`: no cadence is in force and none starts later. Report that, and
-     for a self-paced loop, end the loop.
+   - `never`: no sweep falls due under the schedule: the cadence is unset,
+     is `off` with nothing after it, or turns `off` before the interval in
+     force runs out. Report that, and for a self-paced loop, end the loop.
    - a UTC instant: not due yet. Report it and stop; a self-paced loop wakes
      at that instant (or at its longest allowed delay, whichever is sooner)
      and checks again.

@@ -13,6 +13,10 @@ holds mail the ledger does not list (:func:`outlooks.coverage.unclassified`),
 whatever the interval says, so a run that archived and stopped short of
 classifying is finished first. ``off`` and an unset cadence schedule nothing.
 
+An interval is elapsed time from the last sweep (``1d`` is 24 hours), so across
+a daylight-saving change a daily sweep's local time moves by an hour; change
+points are local midnights.
+
 Internal: not part of the Python API a consuming repo may import (the
 README's "Python API" lists what is). The CLI is this module's interface.
 """
@@ -58,7 +62,12 @@ def _every(text: str, entry: str) -> timedelta | None:
     n, unit = int(found.group(1)), found.group(2)
     if n == 0:
         raise config.ConfigError(f"sweep_cadence entry {entry!r}: an interval of 0")
-    return timedelta(**{UNITS[unit]: n})
+    try:
+        return timedelta(**{UNITS[unit]: n})
+    except OverflowError:
+        raise config.ConfigError(
+            f"sweep_cadence entry {entry!r}: {text!r} is too long an interval"
+        ) from None
 
 
 def parse(entries: Iterable[str]) -> tuple[Step, ...]:

@@ -57,8 +57,9 @@ what a consuming repo has to do about it:
   sweep. Coverage ends at the instant a sweep pulled its window, always
   after the newest message it listed, so comparing the two always found a
   lag. The line now counts the covered messages received after the ledger's
-  high-water mark that the ledger does not list, and appears only when there
-  are some.
+  high-water mark that the ledger does not list (every covered message when
+  the ledger has no rows yet, as `due` counts them), and appears only when
+  there are some.
 
 ## [0.6.0] - 2026-10-10
 

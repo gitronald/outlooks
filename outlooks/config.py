@@ -146,23 +146,18 @@ def load(start: Path | None = None) -> Settings:
         value = raw(key)
         return None if value is None or value == "" else str(value)
 
-    def addresses(key: str) -> tuple[str, ...]:
+    def strings(key: str, noun: str) -> tuple[str, ...]:
+        """A list key: a TOML list, or a comma-separated string; blanks dropped."""
         value = raw(key)
         if value is None:
             return ()
         items = value.split(",") if isinstance(value, str) else value
         if not isinstance(items, list):
-            raise ConfigError(f"[tool.outlooks] {key} must be a list of addresses")
-        return tuple(str(a).strip().lower() for a in items if str(a).strip())
-
-    def entries(key: str) -> tuple[str, ...]:
-        value = raw(key)
-        if value is None:
-            return ()
-        items = value.split(",") if isinstance(value, str) else value
-        if not isinstance(items, list):
-            raise ConfigError(f"[tool.outlooks] {key} must be a list of strings")
+            raise ConfigError(f"[tool.outlooks] {key} must be a list of {noun}")
         return tuple(str(e).strip() for e in items if str(e).strip())
+
+    def addresses(key: str) -> tuple[str, ...]:
+        return tuple(a.lower() for a in strings(key, "addresses"))
 
     def path(key: str) -> Path | None:
         value = get(key)
@@ -193,7 +188,7 @@ def load(start: Path | None = None) -> Settings:
         timezone=ZoneInfo(get("timezone") or DEFAULTS["timezone"]),
         render_label=get("render_label") or DEFAULTS["render_label"],
         profile=path("profile"),
-        sweep_cadence=entries("sweep_cadence"),
+        sweep_cadence=strings("sweep_cadence", "strings"),
         origins=origins,
     )
 

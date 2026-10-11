@@ -325,7 +325,8 @@ def _covered(ts: datetime | None, spans: list[tuple[datetime, datetime]]) -> boo
     return ts is not None and any(a <= ts <= b for a, b in spans)
 
 
-def _local_time(ts: datetime) -> str:
+def local_time(ts: datetime) -> str:
+    """``ts`` in the configured zone, to the minute, as the reports print it."""
     return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
 
 
@@ -343,9 +344,10 @@ def high_water(ledger: list[dict[str, str]], mailbox: str) -> datetime | None:
 
 def unclassified(
     mailbox: str,
-    rows: list[dict[str, str]],
+    covered: list[tuple[datetime, datetime]],
     hits: dict[str, dict[str, Any]],
     ledger: list[dict[str, str]],
+    mark: datetime | None,
 ) -> int:
     """Covered hits received after the ledger's high-water mark that it does not list.
 
@@ -353,11 +355,11 @@ def unclassified(
     a sweep pulled its window, after the newest message it listed, so comparing
     the mark with the end of coverage would call every finished sweep behind.
     With no ledger rows, every covered hit counts.
+
+    ``covered`` is :func:`merge` of ``mailbox``'s rows and ``mark`` its
+    :func:`high_water`, which the callers have already computed.
     """
-    box = _ledger_rows(ledger, mailbox)
-    listed = {r.get("internet_message_id") for r in box}
-    mark = high_water(ledger, mailbox)
-    covered = merge([r for r in rows if r["mailbox"] == mailbox])
+    listed = {r.get("internet_message_id") for r in _ledger_rows(ledger, mailbox)}
     return sum(
         h.get("mailbox") == mailbox
         and mid not in listed
@@ -410,7 +412,7 @@ def report(
         lines.append("no windows recorded")
     for a, b in covered:
         n = sum(_covered(_received(h), [(a, b)]) for h in hits.values())
-        lines.append(f"  covered  {_local_time(a)} to {_local_time(b)}  {n} archived")
+        lines.append(f"  covered  {local_time(a)} to {local_time(b)}  {n} archived")
     start = since or (covered[0][0] if covered else None)
     if start is not None:
         for a, b in gaps(covered, start, now):
@@ -421,7 +423,7 @@ def report(
                 for h in hits.values()
             )
             note = f"  {n} archived (lookup only)" if n else ""
-            lines.append(f"  GAP      {_local_time(a)} to {_local_time(b)}{note}")
+            lines.append(f"  GAP      {local_time(a)} to {local_time(b)}{note}")
     unread: Counter[str] = Counter()
     by_design = 0
     for mid, h in hits.items():
@@ -440,10 +442,10 @@ def report(
     mark = high_water(ledger, mailbox)
     end = covered[-1][1] if covered else None
     if mark is not None:
-        lines.append(f"ledger high-water mark  {_local_time(mark)}")
+        lines.append(f"ledger high-water mark  {local_time(mark)}")
     if end is not None:
-        lines.append(f"coverage ends           {_local_time(end)}")
-        lag = unclassified(mailbox, rows, hits, ledger) if mark is not None else 0
+        lines.append(f"coverage ends           {local_time(end)}")
+        lag = unclassified(mailbox, covered, hits, ledger, mark)
         if lag:
             lines.append(
                 f"  the ledger lags coverage: {lag} archived "
