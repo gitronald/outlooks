@@ -1,8 +1,8 @@
 ---
 id: 4
 slug: ledger-read-commands
-status: draft
-branch:
+status: active
+branch: feature/ledger-read-commands
 created: 2026-10-11T15:21:09-07:00
 concluded:
 pr:
@@ -98,3 +98,11 @@ connector call, and write nothing.
 - `uv run ruff check .`, `uv run ruff format --check .`,
   `uv run pyrefly check`, `uv run pytest`.
 - Changelog entries under *Added*.
+
+## Log
+
+- **2026-10-11T15:25:33-07:00** — Activated.
+  - Branch: `feature/ledger-read-commands`
+  - Base: `dev` at `02db059`
+  - Worktree: `.worktrees/ledger-read-commands`
+  - PR: pending
