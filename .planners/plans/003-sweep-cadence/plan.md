@@ -30,8 +30,8 @@ watching has to leave the mailbox in a state the operator can pick up.
    - An undated entry is the cadence from the start; a dated entry takes over
      from midnight of that date in the configured zone. Entries are in date
      order, at most one undated, and it comes first.
-   - Example: `["7d", "2027-09-24 1d", "2027-10-03 off"]` is weekly, daily
-     from the 24th, and no scheduled sweeps from the 3rd.
+   - Example: `["7d", "2027-03-08 1d", "2027-03-15 off"]` is weekly, daily
+     from the 8th, and no scheduled sweeps from the 15th.
    - Unset means no cadence: `due` says so, and a scheduled run does nothing.
    - A malformed entry is a `ConfigError` naming the entry.
 2. **`outlooks due`**, read-only. It reports:

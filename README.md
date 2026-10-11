@@ -122,6 +122,7 @@ scratch_dir = "temp/outlook"
 timezone = "America/Los_Angeles"
 render_label = "Message"                # render's --label when none is passed
 profile = "docs/outlook-profile.md"
+sweep_cadence = ["7d", "2027-03-08 1d", "2027-03-15 off"]  # scheduled sweeps
 ```
 
 For the signed-in account's own mailbox, leave `mailbox` unset and list the
@@ -138,6 +139,14 @@ stands for any run of characters, for a sender that writes from many
 addresses. An address belongs to one list: one of `own_addresses` is ours
 whatever a pattern matches, and an address that both sender lists match is
 a notice sender.
+
+`sweep_cadence` says how often a scheduled sweep runs. Each entry is
+`"<every>"` or `"<YYYY-MM-DD> <every>"`, where `<every>` is `<n>d`, `<n>h`,
+or `off`: an undated entry holds from the start, and a dated one takes over
+from midnight of that date in `timezone`. The example sweeps weekly, daily
+from March 8, and not at all from March 15. Unset, nothing is
+scheduled. `uv run outlooks due` reads it (see the sweep skill's scheduled
+run).
 
 `uv run outlooks config` prints the effective values and where each came from.
 The `profile` is repo-owned prose the skill reads for what this package cannot
@@ -202,6 +211,7 @@ so one repair never rewrites anything else that differs.
 |---|---|
 | `outlooks import [paths] [--replace]` | file the hook's captures; record complete windows |
 | `outlooks coverage [--since] [--ledger]` | covered spans, gaps, unread counts, ledger lag, and the next sweep's start |
+| `outlooks due [--ledger]` | whether a scheduled sweep is due under `sweep_cadence`; last line `next sweep due  now`, a UTC instant, or `never`; exit 0 only when due now |
 | `outlooks senders [--since]` | inbound hits counted by sender, each marked `own`, `system`, `notice`, or `unlisted` (`none` for the hits with no sender) |
 | `outlooks split <name> --match ...` | a lookup's hits: archived (timeline written) vs to-read |
 | `outlooks check <name>` | a lookup's timeline files against the archive |
@@ -315,6 +325,7 @@ def outlooks_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("OUTLOOKS_SCRATCH_DIR", str(tmp_path / "scratch"))
     monkeypatch.delenv("OUTLOOKS_PROFILE", raising=False)
     monkeypatch.delenv("OUTLOOKS_RENDER_LABEL", raising=False)
+    monkeypatch.delenv("OUTLOOKS_SWEEP_CADENCE", raising=False)
 ```
 
 The settings are resolved again whenever the working directory or an

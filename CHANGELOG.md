@@ -16,12 +16,49 @@ what a consuming repo has to do about it:
 - the archive's file format;
 - a command's name or exit code;
 - a line another tool is told to read: the `coverage` footer (`ledger
-  high-water mark`, `coverage ends`, `next sweep from`), and `COVERED`,
-  `INCOMPLETE`, and `DIFFERS` from `import`;
+  high-water mark`, `coverage ends`, `next sweep from`), `next sweep due`
+  from `due`, and `COVERED`, `INCOMPLETE`, and `DIFFERS` from `import`;
 - a skill step's name;
 - a key of a lookup's timeline file.
 
 ## [Unreleased]
+
+### Added
+
+- A `sweep_cadence` setting: how often a scheduled sweep runs, as entries
+  `"<every>"` or `"<YYYY-MM-DD> <every>"` (`<n>d`, `<n>h`, or `off`), so a
+  cadence can tighten before a date and stop after it. Unset, nothing is
+  scheduled. `outlooks doctor` fails its settings check on an entry that
+  does not parse.
+- `outlooks due`, read-only: the cadence in force, the last sweep (the end
+  of coverage), the ledger's high-water mark, the archived mail the ledger
+  does not list, and a last line `next sweep due` that reads `now`, a UTC
+  instant, or `never`. It exits 0 only when a sweep is due now.
+- The sweep skill's *Running on a schedule* section, for a run started with
+  `scheduled` by `/loop`, a cron, or a hosted routine: it checks `due`
+  first, records every candidate as deferred instead of waiting at step
+  `approval`, writes the worklist to `sweep-<YYYY-MM-DD>.md` in
+  `scratch_dir`, never files, and never commits. It adds no numbered step.
+- The profile template's *8. Cadence* heading: how the repo starts its
+  scheduled sweeps, the dates its cadence is built around, and who reads
+  the worklist.
+
+### Changed
+
+- `config.Settings` has a `sweep_cadence` field (the entries as written),
+  after `profile`. A repo that builds a `Settings` itself passes it; one
+  that only reads `config.settings()` changes nothing. A test fixture that
+  pins every `OUTLOOKS_*` variable unsets `OUTLOOKS_SWEEP_CADENCE` too (the
+  README's fixture shows it).
+
+### Fixed
+
+- `outlooks coverage` no longer says the ledger lags coverage after every
+  sweep. Coverage ends at the instant a sweep pulled its window, always
+  after the newest message it listed, so comparing the two always found a
+  lag. The line now counts the covered messages received after the ledger's
+  high-water mark that the ledger does not list, and appears only when there
+  are some.
 
 ## [0.6.0] - 2026-10-10
 

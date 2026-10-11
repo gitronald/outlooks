@@ -105,3 +105,12 @@ history belongs.
   used for most files belongs in `render_label` in `[tool.outlooks]`, so a
   forgotten `--label` still files under the repo's naming.
 - How an original attachment the operator drags in by hand is named.
+
+## 8. Cadence
+
+- Whether the sweep runs on a schedule, and how it is started (a self-paced
+  `/loop /outlooks sweep scheduled`, a fixed interval, a cron), or "attended
+  only".
+- The `sweep_cadence` in `[tool.outlooks]` and the dates it is built
+  around (a deadline, an event), and who updates it when those dates move.
+- Who reads the scheduled run's worklist file, and how often.
