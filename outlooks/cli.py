@@ -67,6 +67,21 @@ def _ledger(ledger: Path | None) -> Path:
     return ledger or cv.ledger_csv()
 
 
+def _width() -> int | None:
+    """The terminal's width, or None when output is not a terminal.
+
+    Piped output (an agent's shell, a file) is read in full, so it is never
+    cut; ``COLUMNS`` set by hand still sets a width.
+    """
+    import os
+    import shutil
+    import sys
+
+    if "COLUMNS" in os.environ or sys.stdout.isatty():
+        return shutil.get_terminal_size().columns
+    return None
+
+
 def _mailbox(mailbox: str | None) -> str:
     from outlooks import config
 
@@ -297,25 +312,26 @@ def ledger_(
         typer.Option(help="Keep rows received on or after YYYY-MM-DD."),
     ] = None,
     wide: Annotated[
-        bool, typer.Option("--wide", help="Print long values in full.")
+        bool,
+        typer.Option(
+            "--wide",
+            help="Print long values in full (always, when output is not a terminal).",
+        ),
     ] = False,
 ) -> None:
     """Count the ledger's rows by outcome, or list one outcome's rows (read-only)."""
-    import shutil
-    from datetime import datetime
-
-    from outlooks import config
     from outlooks import coverage as cv
     from outlooks import ledger as lg
+    from outlooks import worklist as wl
     from outlooks.thread import archive
 
     box = _mailbox(mailbox)
     start = None
     if since:
         try:
-            start = datetime.fromisoformat(since).replace(tzinfo=config.zone())
-        except ValueError:
-            raise _fail(f"{since!r} is not a YYYY-MM-DD date") from None
+            start = wl.bound(since)
+        except wl.WorklistError as e:
+            raise _fail(e) from None
     path = _ledger(ledger)
     all_rows = cv.read_rows(path)
     rows = lg.select(all_rows, box, start)
@@ -336,8 +352,10 @@ def ledger_(
         )
         return
     columns = list(all_rows[0])
-    table = lg.table(listed, columns, archive(), show_outcome=len(words) > 1)
-    limit = None if wide else shutil.get_terminal_size().columns
+    # The archive is read only for a column the ledger lacks.
+    payloads = archive() if lg.fallback(columns) else {}
+    table = lg.table(listed, columns, payloads, show_outcome=len(words) > 1)
+    limit = None if wide else _width()
     typer.echo("\n".join(lg.render(table, limit)))
     typer.echo(f"{len(listed)} row{'s' * (len(listed) != 1)}")
 
@@ -352,8 +370,6 @@ def thread(
     ],
 ) -> None:
     """Print an archived message's thread, oldest first, and who wrote last."""
-    import shutil
-
     from outlooks import config, store
     from outlooks import thread as th
     from outlooks.coverage import local_time
@@ -365,7 +381,7 @@ def thread(
     except th.ThreadError as e:
         raise _fail(e) from None
     entries = th.thread(mid, payloads)
-    width = shutil.get_terminal_size().columns
+    width = _width()
     typer.echo(
         f"thread of {store.id_hash(mid)} ({len(entries)} "
         f"message{'s' * (len(entries) != 1)}, "
@@ -379,7 +395,8 @@ def thread(
             f"{e.subject}{note}"
         )
         if e.first_line:
-            typer.echo(cut(f"      {e.first_line}", width))
+            line = f"      {e.first_line}"
+            typer.echo(line if width is None else cut(line, width))
     last = entries[-1]
     typer.echo(
         f"last written by {last.sender or '(no sender)'} ({last.direction}) "

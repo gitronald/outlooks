@@ -353,3 +353,50 @@ def test_thread_with_a_blank_subject_does_not_join_other_blank_subjects():
     assert result.exit_code == 0, result.output
     assert "(1 message," in result.output
     assert "bo@example.com" not in result.output
+
+
+def test_ledger_piped_output_is_never_cut(monkeypatch):
+    # Not a terminal and no COLUMNS: an agent's shell reads every value whole.
+    note = "a long note " * 20
+    write_ledger(
+        [row(1, "2026-03-01T17:00:00Z", "deferred", note=note.strip())],
+        ("internet_message_id", "received", "outcome", "note"),
+    )
+    monkeypatch.delenv("COLUMNS")
+    result = invoke("ledger", "--outcome", "deferred")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[1].endswith(note.strip())
+
+
+def test_ledger_with_sender_and_subject_columns_does_not_read_the_archive(
+    monkeypatch,
+):
+    import outlooks.thread
+
+    def refuse():
+        raise AssertionError("the archive was read")
+
+    monkeypatch.setattr(outlooks.thread, "archive", refuse)
+    write_ledger(
+        [row(1, "2026-03-01T17:00:00Z", "deferred", sender="a@x.org", subject="Hi")],
+        ("internet_message_id", "received", "outcome", "sender", "subject"),
+    )
+    result = invoke("ledger", "--outcome", "deferred")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[1].split()[-2:] == ["a@x.org", "Hi"]
+
+
+def test_thread_piped_output_keeps_the_whole_first_line(monkeypatch):
+    body = "word " * 40
+    message(
+        "<p1@example.com>",
+        "2026-03-01T17:00:00Z",
+        "ada@example.com",
+        [BOX],
+        "Long",
+        body,
+    )
+    monkeypatch.delenv("COLUMNS")
+    result = invoke("thread", "<p1@example.com>")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[2] == f"      {body.strip()}"

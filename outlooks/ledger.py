@@ -63,6 +63,11 @@ class Table:
     fixed: int
 
 
+def fallback(columns: list[str]) -> list[str]:
+    """``sender`` and ``subject``, whichever the ledger's ``columns`` lack."""
+    return [c for c in ("sender", "subject") if c not in columns]
+
+
 def table(
     rows: list[dict[str, str]],
     columns: list[str],
@@ -79,18 +84,18 @@ def table(
     adds the outcome, for a listing of more than one.
     """
     extra = [c for c in columns if c not in CORE and c != "mailbox"]
-    fallback = [c for c in ("sender", "subject") if c not in columns]
+    missing = fallback(columns)
     header = [
         "received",
         "key",
         *(["outcome"] if show_outcome else []),
-        *fallback,
+        *missing,
         *extra,
     ]
     out: list[list[str]] = []
     for r in rows:
         mid = r.get("internet_message_id") or ""
-        mail = classify.view(archive[mid]) if mid in archive else None
+        mail = classify.view(archive[mid]) if missing and mid in archive else None
         known = {
             "sender": mail.sender if mail else "",
             "subject": mail.subject if mail else "",
@@ -100,7 +105,7 @@ def table(
                 local_time(parse_ts(r["received"])) if r.get("received") else "",
                 store.id_hash(mid)[:KEY_CHARS] if mid else "",
                 *([r.get("outcome") or ""] if show_outcome else []),
-                *(known[c] for c in fallback),
+                *(known[c] for c in missing),
                 *(_one_line(r.get(c) or "") for c in extra),
             ]
         )

@@ -31,7 +31,8 @@ what a consuming repo has to do about it:
   first, each with its received time in the configured zone, its archive
   key, and the ledger's own columns, with sender and subject from the
   archive when the ledger has none. `--since` narrows to rows received on
-  or after a date; long values are cut to the terminal unless `--wide`.
+  or after a date; long values are cut to the terminal's width unless
+  `--wide`, and never when the output is not a terminal.
 - `outlooks thread <id>`: a message's archived thread, oldest first, with
   each message's direction, sender, subject, and first line, and a last
   line naming who wrote last. `<id>` is an `internetMessageId` or at least
