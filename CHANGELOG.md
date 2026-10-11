@@ -23,6 +23,8 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-11
+
 ### Added
 
 - A `sweep_cadence` setting: how often a scheduled sweep runs, as entries
