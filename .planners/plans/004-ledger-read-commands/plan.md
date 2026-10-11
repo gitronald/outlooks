@@ -107,3 +107,18 @@ connector call, and write nothing.
   - Worktree: `.worktrees/ledger-read-commands`
   - PR: pending
 - **2026-10-11T15:29:27-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/13
+- **2026-10-11T15:29:53-07:00** — Implemented both commands (`outlooks/ledger.py`,
+  `outlooks/thread.py`, wired in `cli.py`), the sweep skill text, the README
+  rows, the contract pins, and the changelog. Checks: ruff, ruff format,
+  pyrefly, and the full suite (532 passed) ran green in the worktree.
+  Decisions the spec left open:
+  - `--since` without `--outcome` narrows the counts; only `--outcome` lists rows.
+  - A ledger's `mailbox` column is not listed: the rows are already one
+    mailbox's (`coverage.ledger_rows`, made package-public for this).
+  - With more than one `--outcome` word the listing adds an `outcome` column,
+    since the rows would otherwise not say which word each has.
+  - Truncation never cuts `received`, the key, or `outcome`; the other columns
+    are cut widest first, to no less than 8 characters.
+  - When the named message has no `conversationId` (a hit never read in full),
+    every message joins by subject. A blank subject joins nothing.
+  - A word no row has prints the ledger's outcome words, exit 0.
