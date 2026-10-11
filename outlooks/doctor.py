@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfoNotFoundError
 import pkgskills
 from pkgskills.stamp import PREFIX
 
-from outlooks import config, coverage, hook, store
+from outlooks import cadence, config, coverage, hook, store
 from outlooks.host import HOST
 from outlooks.timestamps import parse_ts
 
@@ -68,6 +68,10 @@ def _settings(start: Path) -> str:
         raise _Failed(f"{found.source}: not a setting: {', '.join(unknown)}")
     if not (found.mailbox or found.own_addresses):
         raise _Failed(f"{found.source}: neither mailbox nor own_addresses is set")
+    try:
+        cadence.parse(found.sweep_cadence)
+    except config.ConfigError as e:
+        raise _Failed(str(e)) from None
     return str(found.source)
 
 
