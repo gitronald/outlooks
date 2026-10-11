@@ -2,6 +2,7 @@
 
     outlooks import [<capture-dir-or-file> ...] [--replace]
     outlooks coverage [--since YYYY-MM-DD] [--ledger <ledger.csv>]
+    outlooks due [--ledger <ledger.csv>]
     outlooks senders [--since YYYY-MM-DD]
     outlooks save <message.json> [--text <attachment.txt>] | <hits.json> --hits
     outlooks render <message.json> --out <dir> [--text <att.txt>]
@@ -219,6 +220,60 @@ def coverage(
         skipped=cv.mass_copies(hits, cv.read_rows(cv.mass_sends_csv())),
     )
     typer.echo("\n".join(lines))
+
+
+@app.command()
+def due(
+    mailbox: Annotated[str | None, typer.Option(help="Mailbox to check.")] = None,
+    ledger: Annotated[
+        Path | None,
+        typer.Option(help="The sweep's ledger (default: ledger.csv in archive_dir)."),
+    ] = None,
+) -> None:
+    """Say when the next scheduled sweep is due (read-only); exit 0 when due now."""
+    from datetime import UTC, datetime
+
+    from outlooks import cadence, config, store
+    from outlooks import coverage as cv
+    from outlooks.timestamps import fmt_ts
+
+    box = _mailbox(mailbox)
+    try:
+        steps = cadence.parse(config.settings().sweep_cadence)
+    except config.ConfigError as e:
+        raise _fail(e) from None
+    if ledger is not None and not ledger.is_file():
+        raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
+    now = datetime.now(UTC)
+    rows = cv.read_rows()
+    covered = cv.merge([r for r in rows if r["mailbox"] == box])
+    last = covered[-1][1] if covered else None
+    ledger_rows = cv.read_rows(ledger or cv.ledger_csv())
+    mark = cv.high_water(ledger_rows, box)
+    lag = cv.unclassified(box, rows, store.load_hits(), ledger_rows)
+    when = cadence.next_due(steps, last, lag, now)
+
+    def local(ts: datetime) -> str:
+        return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
+
+    force = cadence.in_force(steps, now)
+    described = "; ".join(s.describe() for s in steps) or "(unset)"
+    lines = [
+        f"cadence                 {described}",
+        f"in force now            {force.describe() if force else '(none)'}",
+        f"last sweep              {local(last) if last else '(no coverage)'}",
+        f"ledger high-water mark  {local(mark) if mark else '(no rows)'}",
+        f"unclassified            {lag}",
+    ]
+    if when is None:
+        lines.append("next sweep due          never")
+    elif when <= now:
+        lines.append("next sweep due          now")
+    else:
+        lines.append(f"next sweep due          {fmt_ts(when)}")
+    typer.echo("\n".join(lines))
+    if when is None or when > now:
+        raise typer.Exit(1)
 
 
 @app.command()
