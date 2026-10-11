@@ -5,7 +5,7 @@ status: active
 branch: feature/ledger-read-commands
 created: 2026-10-11T15:21:09-07:00
 concluded:
-pr:
+pr: https://github.com/gitronald/outlooks/pull/13
 ---
 
 # Add read-only commands for the ledger and a message's thread
@@ -106,3 +106,4 @@ connector call, and write nothing.
   - Base: `dev` at `02db059`
   - Worktree: `.worktrees/ledger-read-commands`
   - PR: pending
+- **2026-10-11T15:29:27-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/13
