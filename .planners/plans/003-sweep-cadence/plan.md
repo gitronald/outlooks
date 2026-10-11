@@ -5,7 +5,7 @@ status: active
 branch: feature/sweep-cadence
 created: 2026-10-11T04:57:33-07:00
 concluded:
-pr:
+pr: https://github.com/gitronald/outlooks/pull/11
 ---
 
 # Schedule recurring sweeps with a cadence setting and a due check
@@ -102,3 +102,4 @@ watching has to leave the mailbox in a state the operator can pick up.
   - Base: `dev` at `46c626f`
   - Worktree: `.worktrees/sweep-cadence`
   - PR: pending
+- **2026-10-11T05:02:56-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/11
