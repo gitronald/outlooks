@@ -808,7 +808,39 @@ def test_report_counts_lookup_hits_in_gaps_unread_hits_and_ledger_lag():
         in lines
     )
     assert "  2026-03  1" in lines
-    assert "  the ledger lags coverage: archived mail not yet classified" in lines
+    # Nothing covered arrived after the mark, so the ledger is not behind.
+    assert not [s for s in lines if "lags coverage" in s]
+    hits["<d>"] = {"mailbox": BOX, "receivedDateTime": "2026-03-25T12:00:00Z"}
+    lines = cv.report(BOX, rows, hits, {"<a>"}, ledger, now=ts("2026-05-01T07:00:00Z"))
+    assert "  the ledger lags coverage: 1 archived message not yet classified" in lines
+
+
+def test_unclassified_counts_covered_hits_after_the_mark_the_ledger_lacks():
+    rows = [
+        {
+            "mailbox": BOX,
+            "after": "2026-03-01T08:00:00Z",
+            "before": "2026-04-01T07:00:00Z",
+        }
+    ]
+    hits = {
+        "<old>": {"mailbox": BOX, "receivedDateTime": "2026-03-05T12:00:00Z"},
+        "<listed>": {"mailbox": BOX, "receivedDateTime": "2026-03-25T12:00:00Z"},
+        "<new>": {"mailbox": BOX, "receivedDateTime": "2026-03-26T12:00:00Z"},
+        "<gap>": {"mailbox": BOX, "receivedDateTime": "2026-04-10T12:00:00Z"},
+        "<other>": {
+            "mailbox": "x@example.org",
+            "receivedDateTime": "2026-03-27T00:00:00Z",
+        },
+    }
+    ledger = [
+        {"internet_message_id": "<mark>", "received": "2026-03-20T00:00:00Z"},
+        {"internet_message_id": "<listed>", "received": "2026-03-25T12:00:00Z"},
+    ]
+    # <listed> moved the mark to 03-25, so only <new> is behind it.
+    assert cv.unclassified(BOX, rows, hits, ledger) == 1
+    assert cv.unclassified(BOX, rows, hits, []) == 3
+    assert cv.unclassified(BOX, [], hits, []) == 0
 
 
 ROW = {

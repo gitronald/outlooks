@@ -329,6 +329,45 @@ def _local_time(ts: datetime) -> str:
     return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
 
 
+def _ledger_rows(ledger: list[dict[str, str]], mailbox: str) -> list[dict[str, str]]:
+    """``ledger``'s rows for ``mailbox``; with no ``mailbox`` column, all of them."""
+    return [r for r in ledger if r.get("mailbox", mailbox).lower() == mailbox]
+
+
+def high_water(ledger: list[dict[str, str]], mailbox: str) -> datetime | None:
+    """The latest ``received`` among ``mailbox``'s ledger rows, or ``None``."""
+    rows = _ledger_rows(ledger, mailbox)
+    marks = [parse_ts(r["received"]) for r in rows if r.get("received")]
+    return max(marks, default=None)
+
+
+def unclassified(
+    mailbox: str,
+    rows: list[dict[str, str]],
+    hits: dict[str, dict[str, Any]],
+    ledger: list[dict[str, str]],
+) -> int:
+    """Covered hits received after the ledger's high-water mark that it does not list.
+
+    The mail a sweep archived and did not classify. Coverage ends at the instant
+    a sweep pulled its window, after the newest message it listed, so comparing
+    the mark with the end of coverage would call every finished sweep behind.
+    With no ledger rows, every covered hit counts.
+    """
+    box = _ledger_rows(ledger, mailbox)
+    listed = {r.get("internet_message_id") for r in box}
+    mark = high_water(ledger, mailbox)
+    covered = merge([r for r in rows if r["mailbox"] == mailbox])
+    return sum(
+        h.get("mailbox") == mailbox
+        and mid not in listed
+        and (ts := _received(h)) is not None
+        and (mark is None or ts > mark)
+        and _covered(ts, covered)
+        for mid, h in hits.items()
+    )
+
+
 def next_sweep(mark: datetime | None, end: datetime | None) -> datetime | None:
     """The instant the next sweep passes as ``afterDateTime``.
 
@@ -398,19 +437,18 @@ def report(
         lines += [f"  {month}  {n}" for month, n in sorted(unread.items())]
     if by_design:
         lines.append(f"mass-send copies left unread by design  {by_design}")
-    marks = [
-        parse_ts(r["received"])
-        for r in ledger
-        if r.get("received") and r.get("mailbox", mailbox).lower() == mailbox
-    ]
-    mark = max(marks, default=None)
+    mark = high_water(ledger, mailbox)
     end = covered[-1][1] if covered else None
     if mark is not None:
         lines.append(f"ledger high-water mark  {_local_time(mark)}")
     if end is not None:
         lines.append(f"coverage ends           {_local_time(end)}")
-        if mark is not None and mark < end:
-            lines.append("  the ledger lags coverage: archived mail not yet classified")
+        lag = unclassified(mailbox, rows, hits, ledger) if mark is not None else 0
+        if lag:
+            lines.append(
+                f"  the ledger lags coverage: {lag} archived "
+                f"{'message' if lag == 1 else 'messages'} not yet classified"
+            )
     start = next_sweep(mark, end)
     if start is not None:
         # The one line in UTC: it is passed to the connector as printed.
