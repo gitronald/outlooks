@@ -39,12 +39,14 @@ what a consuming repo has to do about it:
   each message's direction, sender, subject, and first line, and a last
   line naming who wrote last. `<id>` is an `internetMessageId` or at least
   six characters of its archive key. Hits never read in full join by
-  subject and are marked so. Exit 1 when the id is not in the archive.
+  subject and are marked so. Long subjects and first lines are cut to the
+  terminal's width, never when the output is not a terminal. Exit 1 when
+  the id is not in the archive.
 - The sweep skill names both: `ledger --outcome` for the deferred rows step
   `sweep` brings back and a scheduled run's report, and `thread` for
   checking a candidate's thread at step `approval`.
 
-### Fixed
+### Security
 
 - A control character in a field a sender writes (a subject, a sender's
   address, a body's first line, an attachment's name or type, a ledger
