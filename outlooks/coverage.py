@@ -330,14 +330,14 @@ def local_time(ts: datetime) -> str:
     return ts.astimezone(config.zone()).strftime("%Y-%m-%d %H:%M")
 
 
-def _ledger_rows(ledger: list[dict[str, str]], mailbox: str) -> list[dict[str, str]]:
+def ledger_rows(ledger: list[dict[str, str]], mailbox: str) -> list[dict[str, str]]:
     """``ledger``'s rows for ``mailbox``; with no ``mailbox`` column, all of them."""
     return [r for r in ledger if r.get("mailbox", mailbox).lower() == mailbox]
 
 
 def high_water(ledger: list[dict[str, str]], mailbox: str) -> datetime | None:
     """The latest ``received`` among ``mailbox``'s ledger rows, or ``None``."""
-    rows = _ledger_rows(ledger, mailbox)
+    rows = ledger_rows(ledger, mailbox)
     marks = [parse_ts(r["received"]) for r in rows if r.get("received")]
     return max(marks, default=None)
 
@@ -359,7 +359,7 @@ def unclassified(
     ``covered`` is :func:`merge` of ``mailbox``'s rows and ``mark`` its
     :func:`high_water`, which the callers have already computed.
     """
-    listed = {r.get("internet_message_id") for r in _ledger_rows(ledger, mailbox)}
+    listed = {r.get("internet_message_id") for r in ledger_rows(ledger, mailbox)}
     return sum(
         h.get("mailbox") == mailbox
         and mid not in listed

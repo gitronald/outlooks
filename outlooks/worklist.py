@@ -34,6 +34,7 @@ from outlooks.coverage import (
     read_rows,
     windows,
 )
+from outlooks.detail import printable
 from outlooks.timestamps import parse_ts
 
 # Calendar invites always come back as a binary-attachment note.
@@ -393,7 +394,8 @@ def audit(prefix: str, *, root: Path | None = None) -> Audit:
                 continue
             result.missing[ctype or "?"] += 1
             if ctype not in NO_TEXT:
-                result.listed.append(f"{path.stem}.{n}  {ctype}  {att.get('name')}")
+                name = printable(str(att.get("name")))
+                result.listed.append(f"{path.stem}.{n}  {printable(ctype)}  {name}")
             if ctype not in ("multipart/signed", *CALENDAR) and att_id not in tried:
                 result.untried.append((f"{path.stem}.{n}", ctype, att.get("uri")))
     return result

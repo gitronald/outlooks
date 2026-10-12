@@ -128,3 +128,10 @@ def test_cli_senders_refuses_a_malformed_since():
     result = runner.invoke(app, ["senders", "--since", "nope"])
     assert result.exit_code == 1
     assert "Error: 'nope' is not a YYYY-MM-DD date" in result.output
+
+
+def test_cli_senders_prints_an_address_control_characters_escaped():
+    archive(hit(1, "ada\x1b[2J@example.com"))
+    result = runner.invoke(app, ["senders"])
+    assert "\x1b" not in result.output
+    assert "ada\\x1b[2j@example.com" in result.output

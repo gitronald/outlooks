@@ -3,6 +3,8 @@
     outlooks import [<capture-dir-or-file> ...] [--replace]
     outlooks coverage [--since YYYY-MM-DD] [--ledger <ledger.csv>]
     outlooks due [--ledger <ledger.csv>]
+    outlooks ledger [--outcome WORD ...] [--since YYYY-MM-DD] [--wide]
+    outlooks thread <internetMessageId | key prefix>
     outlooks senders [--since YYYY-MM-DD]
     outlooks save <message.json> [--text <attachment.txt>] | <hits.json> --hits
     outlooks render <message.json> --out <dir> [--text <att.txt>]
@@ -63,6 +65,21 @@ def _ledger(ledger: Path | None) -> Path:
     if ledger is not None and not ledger.is_file():
         raise _fail(f"{ledger} is not a file; --ledger names the sweep's ledger")
     return ledger or cv.ledger_csv()
+
+
+def _width() -> int | None:
+    """The terminal's width, or None when output is not a terminal.
+
+    Piped output (an agent's shell, a file) is read in full, so it is never
+    cut; ``COLUMNS`` set by hand still sets a width.
+    """
+    import os
+    import shutil
+    import sys
+
+    if "COLUMNS" in os.environ or sys.stdout.isatty():
+        return shutil.get_terminal_size().columns
+    return None
 
 
 def _mailbox(mailbox: str | None) -> str:
@@ -279,6 +296,114 @@ def due(
         raise typer.Exit(1)
 
 
+@app.command("ledger")
+def ledger_(
+    mailbox: Annotated[str | None, typer.Option(help="Mailbox to read.")] = None,
+    ledger: Annotated[
+        Path | None,
+        typer.Option(help="The sweep's ledger (default: ledger.csv in archive_dir)."),
+    ] = None,
+    outcome: Annotated[
+        list[str] | None,
+        typer.Option(help="List the rows with this outcome word (repeatable)."),
+    ] = None,
+    since: Annotated[
+        str | None,
+        typer.Option(help="Keep rows received on or after YYYY-MM-DD."),
+    ] = None,
+    wide: Annotated[
+        bool,
+        typer.Option(
+            "--wide",
+            help="Print long values in full (always, when output is not a terminal).",
+        ),
+    ] = False,
+) -> None:
+    """Count the ledger's rows by outcome, or list one outcome's rows (read-only)."""
+    from outlooks import coverage as cv
+    from outlooks import ledger as lg
+    from outlooks import worklist as wl
+    from outlooks.thread import archive
+
+    box = _mailbox(mailbox)
+    start = None
+    if since:
+        try:
+            start = wl.bound(since)
+        except wl.WorklistError as e:
+            raise _fail(e) from None
+    path = _ledger(ledger)
+    all_rows = cv.read_rows(path)
+    rows = lg.select(all_rows, box, start)
+    scope = f" since {since}" if since else ""
+    if not outcome:
+        typer.echo(f"ledger {path} for {box}{scope}")
+        for word, n in lg.counts(rows):
+            typer.echo(f"{n:6}  {word}")
+        typer.echo(f"{len(rows):6}  total")
+        return
+    words = set(outcome)
+    listed = [r for r in rows if r.get("outcome") in words]
+    if not listed:
+        known = ", ".join(word for word, _ in lg.counts(rows)) or "none"
+        typer.echo(
+            f"no rows with outcome {', '.join(sorted(words))}{scope}; "
+            f"the ledger's outcomes: {known}"
+        )
+        return
+    columns = list(all_rows[0])
+    # The archive is read only for a column the ledger lacks.
+    payloads = archive() if lg.fallback(columns) else {}
+    table = lg.table(listed, columns, payloads, show_outcome=len(words) > 1)
+    limit = None if wide else _width()
+    typer.echo("\n".join(lg.render(table, limit)))
+    typer.echo(f"{len(listed)} row{'s' * (len(listed) != 1)}")
+
+
+@app.command()
+def thread(
+    message: Annotated[
+        str,
+        typer.Argument(
+            help="An internetMessageId, or 6+ characters of its archive key."
+        ),
+    ],
+) -> None:
+    """Print an archived message's thread, oldest first, and who wrote last."""
+    from outlooks import config, store
+    from outlooks import thread as th
+    from outlooks.coverage import local_time
+    from outlooks.ledger import cut
+
+    payloads = th.archive()
+    try:
+        mid = th.resolve(message, payloads)
+    except th.ThreadError as e:
+        raise _fail(e) from None
+    entries = th.thread(mid, payloads)
+    width = _width()
+    typer.echo(
+        f"thread of {store.id_hash(mid)} ({len(entries)} "
+        f"message{'s' * (len(entries) != 1)}, "
+        f"{config.zone_label(entries[-1].received)})"
+    )
+    for e in entries:
+        mark = "*" if e.is_target else " "
+        note = "  (matched by subject)" if e.by_subject else ""
+        head = f"{mark} {local_time(e.received)}  {e.direction:3}  {e.sender}  "
+        # A cut takes the subject's end, so the note always shows.
+        head += e.subject if width is None else cut(e.subject, width - len(head + note))
+        typer.echo(f"{head}{note}")
+        if e.first_line:
+            line = f"      {e.first_line}"
+            typer.echo(line if width is None else cut(line, width))
+    last = entries[-1]
+    typer.echo(
+        f"last written by {last.sender or '(no sender)'} ({last.direction}) "
+        f"at {local_time(last.received)}"
+    )
+
+
 @app.command()
 def senders(
     mailbox: Annotated[str | None, typer.Option(help="Mailbox to report.")] = None,
@@ -291,6 +416,7 @@ def senders(
     from datetime import date
 
     from outlooks import senders as sd
+    from outlooks.detail import printable
 
     box = _mailbox(mailbox)
     start = None
@@ -304,7 +430,8 @@ def senders(
     total = sum(s.count for s in found)
     typer.echo(f"senders for {box}{scope}: {total} inbound hits")
     for s in found:
-        typer.echo(f"{s.count:6}  {s.mark:8}  {s.address or '(no sender)'}")
+        address = printable(s.address) if s.address else "(no sender)"
+        typer.echo(f"{s.count:6}  {s.mark:8}  {address}")
     unlisted = sum(1 for s in found if s.mark == "unlisted")
     typer.echo(
         f"{unlisted} unlisted; a notifier, not a person, belongs in "
@@ -489,6 +616,7 @@ def worklist(
 ) -> None:
     """Reader worklists for a full read of a range (window mode's bulk read)."""
     from outlooks import worklist as wl
+    from outlooks.detail import printable
 
     try:
         result = wl.read_worklist(after, before, out, per=per, name=name)
@@ -506,7 +634,8 @@ def worklist(
             f"{result.orphans} archived hits in range that no window capture lists"
         )
     for hit in result.todo:
-        typer.echo(f"{hit['receivedDateTime']} {(hit.get('subject') or '')[:70]}")
+        subject = printable((hit.get("subject") or "")[:70])
+        typer.echo(f"{hit['receivedDateTime']} {subject}")
 
 
 @app.command()
@@ -584,6 +713,7 @@ def audit(
 ) -> None:
     """Attachment-text audit for the archived messages of a period."""
     from outlooks import worklist as wl
+    from outlooks.detail import printable
 
     result = wl.audit(prefix)
     typer.echo(str(dict(result.counts)))
@@ -593,7 +723,7 @@ def audit(
         typer.echo(f"  MISSING {line}")
     typer.echo(f"never attempted: {len(result.untried)}")
     for name, ctype, _ in result.untried:
-        typer.echo(f"  UNTRIED {name} {ctype}")
+        typer.echo(f"  UNTRIED {name} {printable(ctype)}")
     if sweep:
         sweep.write_text(
             "".join(f"att-{name} {uri}\n" for name, _, uri in result.untried),
