@@ -23,6 +23,12 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+### Changed
+
+- The `pkgskills` requirement drops its `<0.6.0` upper bound and is now
+  `>=0.5.1`, as in the other packages that register a `pkgskills.hosts`
+  entry point. Nothing to do in a consuming repo.
+
 ## [0.8.0] - 2026-10-11
 
 ### Added
