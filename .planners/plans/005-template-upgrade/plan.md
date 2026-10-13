@@ -5,7 +5,7 @@ status: active
 branch: feature/template-upgrade
 created: 2026-10-13T10:58:50-07:00
 concluded:
-pr:
+pr: https://github.com/gitronald/outlooks/pull/17
 ---
 
 # Upgrade to the proj-template 0.11.2 standard
@@ -43,3 +43,4 @@ and `pre-commit run --all-files`, then a PR into `dev`.
   - Base: `dev` at `ed3f1d1`
   - Worktree: `.worktrees/template-upgrade`
   - PR: pending
+- **2026-10-13T10:59:12-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/17
