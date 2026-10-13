@@ -44,3 +44,4 @@ and `pre-commit run --all-files`, then a PR into `dev`.
   - Worktree: `.worktrees/template-upgrade`
   - PR: pending
 - **2026-10-13T10:59:12-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/17
+- **2026-10-13T11:05:59-07:00** — Review gate: /code-review at medium over the batch of five v0.11.2 upgrade PRs reviewed together (same change in each). No findings survived; two cosmetic candidates below the confidence cutoff were conscious no-ops. CI green.
