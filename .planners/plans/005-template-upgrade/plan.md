@@ -1,10 +1,10 @@
 ---
 id: 5
 slug: template-upgrade
-status: active
+status: done
 branch: feature/template-upgrade
 created: 2026-10-13T10:58:50-07:00
-concluded:
+concluded: 2026-10-13T10:59:08-07:00
 pr: https://github.com/gitronald/outlooks/pull/17
 ---
 
@@ -45,3 +45,7 @@ and `pre-commit run --all-files`, then a PR into `dev`.
   - PR: pending
 - **2026-10-13T10:59:12-07:00** — PR opened: https://github.com/gitronald/outlooks/pull/17
 - **2026-10-13T11:05:59-07:00** — Review gate: /code-review at medium over the batch of five v0.11.2 upgrade PRs reviewed together (same change in each). No findings survived; two cosmetic candidates below the confidence cutoff were conscious no-ops. CI green.
+
+## Retrospective
+
+- A one-file change in the branch; the hook update lands in the main checkout after the merge because .claude/ is gitignored here.
