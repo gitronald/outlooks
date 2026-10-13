@@ -1,8 +1,8 @@
 ---
 id: 5
 slug: template-upgrade
-status: draft
-branch:
+status: active
+branch: feature/template-upgrade
 created: 2026-10-13T10:58:50-07:00
 concluded:
 pr:
@@ -35,3 +35,11 @@ are this repo's own and stay as they are:
 
 Checks: `uv sync --all-groups`, ruff check and format check, pyrefly, pytest,
 and `pre-commit run --all-files`, then a PR into `dev`.
+
+## Log
+
+- **2026-10-13T10:58:52-07:00** — Activated.
+  - Branch: `feature/template-upgrade`
+  - Base: `dev` at `ed3f1d1`
+  - Worktree: `.worktrees/template-upgrade`
+  - PR: pending
