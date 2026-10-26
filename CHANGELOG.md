@@ -23,6 +23,8 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-26
+
 ### Changed
 
 - The `pkgskills` requirement drops its `<0.6.0` upper bound and is now
