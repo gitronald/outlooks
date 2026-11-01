@@ -23,6 +23,22 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+### Changed
+
+- The `pkgskills` requirement is now `>=0.6.3`. The stub's stamp moved from an
+  HTML comment into its frontmatter, so a stub an earlier release wrote reads
+  `drifted`, and `outlooks doctor` fails on it until a repo runs
+  `uv run outlooks install`. A plain `install` refreshes it, without `--force`.
+  Going back to an earlier `pkgskills` needs `--force` once.
+- `outlooks doctor`'s `skill stub` note now reads `content current for outlooks
+  <version>` whichever release stamped the stub. It no longer names that release
+  or says that `install` restamps the stub.
+
+### Fixed
+
+- `outlooks doctor` raised `ImportError` with `pkgskills` 0.6.0 or later, which
+  the `>=0.5.1` requirement of 0.8.1 allowed. It no longer reads the stamp.
+
 ## [0.8.1] - 2026-10-26
 
 ### Changed
