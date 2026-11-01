@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import csv
 import json
-import re
 import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,7 +22,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
 
 import pkgskills
-from pkgskills.stamp import PREFIX
 
 from outlooks import cadence, config, coverage, hook, store
 from outlooks.host import HOST
@@ -38,9 +36,6 @@ CHECKS = (
     "hook settings entry",
     "skill stub",
 )
-
-# The version a stub's stamp line names: the release that wrote the stub.
-STAMPED = re.compile(rf"(?m)^{re.escape(PREFIX)}{re.escape(HOST.dist)} (\S+) ")
 
 
 @dataclass(frozen=True)
@@ -191,17 +186,9 @@ def _stub(root: Path) -> str:
     if bad:
         raise _Failed("; ".join(bad) + "; run `uv run outlooks install`")
     # The drift check passes over the stamp's version, so a stub an earlier
-    # release wrote is ok while its content is this release's. The note says
-    # which release stamped it, never that the stamp is this one's.
-    version = HOST.resolved_version()
-    text = "\n".join(row.path.read_text(encoding="utf-8") for row in rows)
-    stamped = sorted(set(STAMPED.findall(text)) - {version})
-    if stamped:
-        return (
-            f"content current for {HOST.dist} {version}, stamped by "
-            f"{', '.join(stamped)}; `uv run outlooks install` restamps it"
-        )
-    return f"current for {HOST.dist} {version}"
+    # release wrote is ok while its content is this release's. The note claims
+    # the content, never that the stamp names this release.
+    return f"content current for {HOST.dist} {HOST.resolved_version()}"
 
 
 def run(start: Path | None = None) -> list[Result]:
@@ -211,7 +198,7 @@ def run(start: Path | None = None) -> list[Result]:
     load: it is reported, never skipped.
     """
     start = (start or Path.cwd()).resolve()
-    root = pkgskills.find_repo_root(start)
+    root = pkgskills.find_repo_root(start, harnesses=HOST.harnesses)
     checks: tuple[Callable[[], str], ...] = (
         lambda: _settings(start),
         lambda: _profile(start),

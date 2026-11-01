@@ -757,7 +757,7 @@ def hook(
 
     from outlooks import hook as hk
 
-    root = find_repo_root(Path.cwd())
+    root = find_repo_root(Path.cwd(), harnesses=HOST.harnesses)
     try:
         if apply:
             done = hk.apply(root, force=force, start=Path.cwd())

@@ -93,7 +93,7 @@ uv run outlooks doctor
 ```
 
 `install` rewrites the stub's content when the new release changed it.
-When it did not, only the stamp line changes, to name the new version.
+When it did not, only the stamp changes, to name the new version.
 
 Read the changelog's *Changed* and *Removed* entries for every release
 between the two versions first: they say what a consuming repo has to do.
