@@ -23,6 +23,8 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-01
+
 ### Changed
 
 - The `pkgskills` requirement is now `>=0.6.3`. The stub's stamp moved from an

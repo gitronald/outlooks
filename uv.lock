@@ -196,7 +196,7 @@ wheels = [
 
 [[package]]
 name = "outlooks"
-version = "0.8.2a0"
+version = "0.8.2"
 source = { editable = "." }
 dependencies = [
     { name = "pkgskills" },
