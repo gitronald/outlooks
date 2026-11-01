@@ -1,13 +1,13 @@
 [project]
 name = "outlooks"
-version = "0.8.1"
+version = "0.8.2"
 description = "Archive and read an Outlook mailbox through the Microsoft 365 connector, with the Claude Code skill that drives it."
 authors = [
     {name = "gitronald", email = "gitronald@users.noreply.github.com"}
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "pkgskills>=0.5.1",
+    "pkgskills>=0.6.3",
     "typer>=0.15.0",
 ]
 readme = "README.md"

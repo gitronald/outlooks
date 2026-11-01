@@ -16,7 +16,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import typer
-from pkgskills import Doc, ExtraCheck, Host, InstallReport, Level, Mode, Skill
+from pkgskills import (
+    CLAUDE_CODE,
+    Doc,
+    ExtraCheck,
+    Host,
+    InstallReport,
+    Level,
+    Mode,
+    Skill,
+)
 
 from outlooks import hook
 
@@ -104,6 +113,9 @@ HOST = Host(
     # The skill reads this repo's archive and config, so a global stub would
     # point every repo at nothing.
     modes=("local",),
+    # The stub is a tracked file in each repo, and that repo works in Claude
+    # Code, so a second stub for another harness would only add a tracked file.
+    harnesses=(CLAUDE_CODE,),
     after_install=_after_install,
     extra_checks=_extra_checks,
     permissions={Level.assist: ("Bash(uv run:*)",)},
