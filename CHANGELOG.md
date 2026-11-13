@@ -23,6 +23,8 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-13
+
 ### Changed
 
 - Maintenance only, with no change to the package's commands or Python API:
