@@ -23,6 +23,13 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+### Changed
+
+- Maintenance only, with no change to the package's commands or Python API:
+  the repo's tooling moved to repotemplates 0.15.0 (the release stamp table is
+  now `[tool.repotemplates]`), and the CI workflow pins, the Dependabot guide
+  link, and the `ruff` pre-commit hook (to v0.17.3) were updated.
+
 ## [0.8.2] - 2026-11-01
 
 ### Changed
