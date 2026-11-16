@@ -23,6 +23,15 @@ what a consuming repo has to do about it:
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-11-16
+
+### Security
+
+- Maintenance only, with no change to the package's commands or Python API:
+  the development lockfile now pins `virtualenv` 21.15.6 (pulled in by
+  `pre-commit`), clearing a high-severity advisory fixed in 21.14.13. The
+  package's runtime requirements are unchanged.
+
 ## [0.8.3] - 2026-11-13
 
 ### Changed
